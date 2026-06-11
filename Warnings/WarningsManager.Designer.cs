@@ -41,6 +41,10 @@ namespace MissionPlanner.Warnings
             this.label6 = new System.Windows.Forms.Label();
             this.label7 = new System.Windows.Forms.Label();
             this.label8 = new System.Windows.Forms.Label();
+            this.label9 = new System.Windows.Forms.Label();
+            this.label10 = new System.Windows.Forms.Label();
+            this.label11 = new System.Windows.Forms.Label();
+            this.label12 = new System.Windows.Forms.Label();
             this.panel1.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -53,7 +57,7 @@ namespace MissionPlanner.Warnings
             this.panel1.Controls.Add(this.label4);
             this.panel1.Location = new System.Drawing.Point(4, 53);
             this.panel1.Name = "panel1";
-            this.panel1.Size = new System.Drawing.Size(866, 175);
+            this.panel1.Size = new System.Drawing.Size(1075, 175);
             this.panel1.TabIndex = 0;
             // 
             // warningControl1
@@ -61,7 +65,7 @@ namespace MissionPlanner.Warnings
             this.warningControl1.custwarning = null;
             this.warningControl1.Location = new System.Drawing.Point(2, 2);
             this.warningControl1.Name = "warningControl1";
-            this.warningControl1.Size = new System.Drawing.Size(857, 27);
+            this.warningControl1.Size = new System.Drawing.Size(1062, 27);
             this.warningControl1.TabIndex = 6;
             // 
             // label4
@@ -105,7 +109,7 @@ namespace MissionPlanner.Warnings
             // label2
             // 
             this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(258, 39);
+            this.label2.Location = new System.Drawing.Point(535, 39);
             this.label2.Name = "label2";
             this.label2.Size = new System.Drawing.Size(62, 13);
             this.label2.TabIndex = 3;
@@ -114,7 +118,7 @@ namespace MissionPlanner.Warnings
             // label3
             // 
             this.label3.AutoSize = true;
-            this.label3.Location = new System.Drawing.Point(314, 39);
+            this.label3.Location = new System.Drawing.Point(593, 39);
             this.label3.Name = "label3";
             this.label3.Size = new System.Drawing.Size(40, 13);
             this.label3.TabIndex = 4;
@@ -123,7 +127,7 @@ namespace MissionPlanner.Warnings
             // label5
             // 
             this.label5.AutoSize = true;
-            this.label5.Location = new System.Drawing.Point(748, 39);
+            this.label5.Location = new System.Drawing.Point(960, 39);
             this.label5.Name = "label5";
             this.label5.Size = new System.Drawing.Size(80, 13);
             this.label5.TabIndex = 6;
@@ -132,7 +136,7 @@ namespace MissionPlanner.Warnings
             // label6
             // 
             this.label6.AutoSize = true;
-            this.label6.Location = new System.Drawing.Point(507, 39);
+            this.label6.Location = new System.Drawing.Point(756, 39);
             this.label6.Name = "label6";
             this.label6.Size = new System.Drawing.Size(50, 13);
             this.label6.TabIndex = 7;
@@ -150,15 +154,55 @@ namespace MissionPlanner.Warnings
             // label8
             // 
             this.label8.AutoSize = true;
-            this.label8.Location = new System.Drawing.Point(398, 39);
+            this.label8.Location = new System.Drawing.Point(662, 39);
             this.label8.Name = "label8";
             this.label8.Size = new System.Drawing.Size(31, 13);
             this.label8.TabIndex = 9;
             this.label8.Text = "Color";
             // 
+            // label9
+            // 
+            this.label9.AutoSize = true;
+            this.label9.Location = new System.Drawing.Point(281, 39);
+            this.label9.Name = "label9";
+            this.label9.Size = new System.Drawing.Size(80, 13);
+            this.label9.TabIndex = 10;
+            this.label9.Text = "Field 2 (optional)";
+            // 
+            // label10
+            // 
+            this.label10.AutoSize = true;
+            this.label10.Location = new System.Drawing.Point(235, 39);
+            this.label10.Name = "label10";
+            this.label10.Size = new System.Drawing.Size(22, 13);
+            this.label10.TabIndex = 11;
+            this.label10.Text = "Op1";
+            // 
+            // label11
+            // 
+            this.label11.AutoSize = true;
+            this.label11.Location = new System.Drawing.Point(431, 39);
+            this.label11.Name = "label11";
+            this.label11.Size = new System.Drawing.Size(80, 13);
+            this.label11.TabIndex = 12;
+            this.label11.Text = "Field 3 (optional)";
+            // 
+            // label12
+            // 
+            this.label12.AutoSize = true;
+            this.label12.Location = new System.Drawing.Point(385, 39);
+            this.label12.Name = "label12";
+            this.label12.Size = new System.Drawing.Size(22, 13);
+            this.label12.TabIndex = 13;
+            this.label12.Text = "Op2";
+            // 
             // WarningsManager
             // 
-            this.ClientSize = new System.Drawing.Size(872, 238);
+            this.ClientSize = new System.Drawing.Size(1085, 238);
+            this.Controls.Add(this.label12);
+            this.Controls.Add(this.label11);
+            this.Controls.Add(this.label10);
+            this.Controls.Add(this.label9);
             this.Controls.Add(this.label8);
             this.Controls.Add(this.label7);
             this.Controls.Add(this.label6);
@@ -192,5 +236,9 @@ namespace MissionPlanner.Warnings
         private WarningControl warningControl1;
         private System.Windows.Forms.Label label7;
         private System.Windows.Forms.Label label8;
+        private System.Windows.Forms.Label label9;
+        private System.Windows.Forms.Label label10;
+        private System.Windows.Forms.Label label11;
+        private System.Windows.Forms.Label label12;
     }
 }

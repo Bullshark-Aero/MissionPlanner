@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Windows.Forms;
 
 namespace MissionPlanner.Warnings
@@ -24,10 +25,51 @@ namespace MissionPlanner.Warnings
 
             CMB_Source.DataSource = item.GetOptions();
 
+            var options2 = new List<string> { NoExtraField };
+            options2.AddRange(item.GetOptions());
+            CMB_Source2.DataSource = options2;
+
+            var options3 = new List<string> { NoExtraField };
+            options3.AddRange(item.GetOptions());
+            CMB_Source3.DataSource = options3;
+
+            CMB_Op1.DataSource = new List<string>(OperatorDisplay);
+            CMB_Op2.DataSource = new List<string>(OperatorDisplay);
 
             custwarning = item;
 
             updateDisplay();
+        }
+
+        private const string NoExtraField = "(none)";
+        private const string NoSecondField = NoExtraField; // backwards-compat alias
+
+        private static readonly string[] OperatorDisplay = new[] { "", "+", "-", "*", "/", "%" };
+
+        private static CustomWarning.MathOp OpFromDisplay(string s)
+        {
+            switch (s)
+            {
+                case "+": return CustomWarning.MathOp.ADD;
+                case "-": return CustomWarning.MathOp.SUB;
+                case "*": return CustomWarning.MathOp.MUL;
+                case "/": return CustomWarning.MathOp.DIV;
+                case "%": return CustomWarning.MathOp.MOD;
+                default: return CustomWarning.MathOp.NONE;
+            }
+        }
+
+        private static string DisplayFromOp(CustomWarning.MathOp op)
+        {
+            switch (op)
+            {
+                case CustomWarning.MathOp.ADD: return "+";
+                case CustomWarning.MathOp.SUB: return "-";
+                case CustomWarning.MathOp.MUL: return "*";
+                case CustomWarning.MathOp.DIV: return "/";
+                case CustomWarning.MathOp.MOD: return "%";
+                default: return "";
+            }
         }
 
         public void updateDisplay()
@@ -35,7 +77,13 @@ namespace MissionPlanner.Warnings
 
             CMB_condition.Text = custwarning.ConditionType.ToString();
             CMB_Source.Text = custwarning.Name;
+            CMB_Source2.Text = string.IsNullOrEmpty(custwarning.Name2) ? NoExtraField : custwarning.Name2;
+            CMB_Source3.Text = string.IsNullOrEmpty(custwarning.Name3) ? NoExtraField : custwarning.Name3;
+            CMB_Op1.Text = DisplayFromOp(custwarning.Operator1);
+            CMB_Op2.Text = DisplayFromOp(custwarning.Operator2);
             NUM_warning.Value = (decimal)custwarning.Warning;
+
+            NUM_warning.Enabled = custwarning.HasExpression || !custwarning.HasSecondField;
 
             if (custwarning.type == CustomWarning.WarningType.SpeakAndText)
             {
@@ -75,13 +123,18 @@ namespace MissionPlanner.Warnings
         private CheckBox CB_type;
         private ComboBox CMB_color;
         private ComboBox CMB_Source;
-        // posible child
-        //private CustomWarning item;
-        //private CurrentState currentState;
+        private ComboBox CMB_Source2;
+        private ComboBox CMB_Source3;
+        private ComboBox CMB_Op1;
+        private ComboBox CMB_Op2;
 
         private void InitializeComponent()
         {
             this.CMB_Source = new System.Windows.Forms.ComboBox();
+            this.CMB_Op1 = new System.Windows.Forms.ComboBox();
+            this.CMB_Source2 = new System.Windows.Forms.ComboBox();
+            this.CMB_Op2 = new System.Windows.Forms.ComboBox();
+            this.CMB_Source3 = new System.Windows.Forms.ComboBox();
             this.CMB_condition = new System.Windows.Forms.ComboBox();
             this.NUM_warning = new System.Windows.Forms.NumericUpDown();
             this.NUM_repeattime = new System.Windows.Forms.NumericUpDown();
@@ -94,20 +147,58 @@ namespace MissionPlanner.Warnings
             ((System.ComponentModel.ISupportInitialize)(this.NUM_repeattime)).BeginInit();
             this.SuspendLayout();
             //
-            // CMB_Source
+            // CMB_Source (Field 1)
             //
             this.CMB_Source.FormattingEnabled = true;
             this.CMB_Source.Location = new System.Drawing.Point(131, 3);
             this.CMB_Source.Name = "CMB_Source";
-            this.CMB_Source.Size = new System.Drawing.Size(116, 21);
+            this.CMB_Source.Size = new System.Drawing.Size(100, 21);
             this.CMB_Source.TabIndex = 0;
             this.CMB_Source.Text = "gpsstat";
             this.CMB_Source.SelectedIndexChanged += new System.EventHandler(this.CMB_Source_SelectedIndexChanged);
             //
+            // CMB_Op1
+            //
+            this.CMB_Op1.FormattingEnabled = true;
+            this.CMB_Op1.Location = new System.Drawing.Point(235, 3);
+            this.CMB_Op1.Name = "CMB_Op1";
+            this.CMB_Op1.Size = new System.Drawing.Size(42, 21);
+            this.CMB_Op1.TabIndex = 10;
+            this.CMB_Op1.SelectedIndexChanged += new System.EventHandler(this.CMB_Op1_SelectedIndexChanged);
+            //
+            // CMB_Source2 (Field 2)
+            //
+            this.CMB_Source2.FormattingEnabled = true;
+            this.CMB_Source2.Location = new System.Drawing.Point(281, 3);
+            this.CMB_Source2.Name = "CMB_Source2";
+            this.CMB_Source2.Size = new System.Drawing.Size(100, 21);
+            this.CMB_Source2.TabIndex = 11;
+            this.CMB_Source2.Text = NoExtraField;
+            this.CMB_Source2.SelectedIndexChanged += new System.EventHandler(this.CMB_Source2_SelectedIndexChanged);
+            //
+            // CMB_Op2
+            //
+            this.CMB_Op2.FormattingEnabled = true;
+            this.CMB_Op2.Location = new System.Drawing.Point(385, 3);
+            this.CMB_Op2.Name = "CMB_Op2";
+            this.CMB_Op2.Size = new System.Drawing.Size(42, 21);
+            this.CMB_Op2.TabIndex = 12;
+            this.CMB_Op2.SelectedIndexChanged += new System.EventHandler(this.CMB_Op2_SelectedIndexChanged);
+            //
+            // CMB_Source3 (Field 3)
+            //
+            this.CMB_Source3.FormattingEnabled = true;
+            this.CMB_Source3.Location = new System.Drawing.Point(431, 3);
+            this.CMB_Source3.Name = "CMB_Source3";
+            this.CMB_Source3.Size = new System.Drawing.Size(100, 21);
+            this.CMB_Source3.TabIndex = 13;
+            this.CMB_Source3.Text = NoExtraField;
+            this.CMB_Source3.SelectedIndexChanged += new System.EventHandler(this.CMB_Source3_SelectedIndexChanged);
+            //
             // CMB_condition
             //
             this.CMB_condition.FormattingEnabled = true;
-            this.CMB_condition.Location = new System.Drawing.Point(253, 3);
+            this.CMB_condition.Location = new System.Drawing.Point(535, 3);
             this.CMB_condition.Name = "CMB_condition";
             this.CMB_condition.Size = new System.Drawing.Size(54, 21);
             this.CMB_condition.TabIndex = 1;
@@ -117,7 +208,7 @@ namespace MissionPlanner.Warnings
             // NUM_warning
             //
             this.NUM_warning.DecimalPlaces = 2;
-            this.NUM_warning.Location = new System.Drawing.Point(313, 4);
+            this.NUM_warning.Location = new System.Drawing.Point(593, 4);
             this.NUM_warning.Maximum = new decimal(new int[] {
             99999,
             0,
@@ -135,7 +226,7 @@ namespace MissionPlanner.Warnings
             //
             // NUM_repeattime
             //
-            this.NUM_repeattime.Location = new System.Drawing.Point(745, 4);
+            this.NUM_repeattime.Location = new System.Drawing.Point(960, 4);
             this.NUM_repeattime.Name = "NUM_repeattime";
             this.NUM_repeattime.Size = new System.Drawing.Size(39, 20);
             this.NUM_repeattime.TabIndex = 3;
@@ -148,16 +239,16 @@ namespace MissionPlanner.Warnings
             //
             // TXT_warningtext
             //
-            this.TXT_warningtext.Location = new System.Drawing.Point(494, 3);
+            this.TXT_warningtext.Location = new System.Drawing.Point(756, 3);
             this.TXT_warningtext.Name = "TXT_warningtext";
-            this.TXT_warningtext.Size = new System.Drawing.Size(236, 20);
+            this.TXT_warningtext.Size = new System.Drawing.Size(200, 20);
             this.TXT_warningtext.TabIndex = 4;
             this.TXT_warningtext.Text = "WARNING: {name} is {value}";
             this.TXT_warningtext.TextChanged += new System.EventHandler(this.TXT_warningtext_TextChanged);
             //
             // but_addchild
             //
-            this.but_addchild.Location = new System.Drawing.Point(791, 4);
+            this.but_addchild.Location = new System.Drawing.Point(1003, 4);
             this.but_addchild.Name = "but_addchild";
             this.but_addchild.Size = new System.Drawing.Size(25, 20);
             this.but_addchild.TabIndex = 5;
@@ -167,7 +258,7 @@ namespace MissionPlanner.Warnings
             //
             // but_remove
             //
-            this.but_remove.Location = new System.Drawing.Point(822, 4);
+            this.but_remove.Location = new System.Drawing.Point(1032, 4);
             this.but_remove.Name = "but_remove";
             this.but_remove.Size = new System.Drawing.Size(25, 20);
             this.but_remove.TabIndex = 6;
@@ -189,9 +280,9 @@ namespace MissionPlanner.Warnings
             // cmbColor
             //
             this.CMB_color.FormattingEnabled = true;
-            this.CMB_color.Location = new System.Drawing.Point(384, 3);
+            this.CMB_color.Location = new System.Drawing.Point(662, 3);
             this.CMB_color.Name = "cmbColor";
-            this.CMB_color.Size = new System.Drawing.Size(104, 21);
+            this.CMB_color.Size = new System.Drawing.Size(90, 21);
             this.CMB_color.TabIndex = 8;
             this.CMB_color.Text = "NoColor";
             this.CMB_color.SelectedIndexChanged += new System.EventHandler(this.cmbColor_SelectedIndexChanged);
@@ -206,9 +297,13 @@ namespace MissionPlanner.Warnings
             this.Controls.Add(this.NUM_repeattime);
             this.Controls.Add(this.NUM_warning);
             this.Controls.Add(this.CMB_condition);
+            this.Controls.Add(this.CMB_Source3);
+            this.Controls.Add(this.CMB_Op2);
+            this.Controls.Add(this.CMB_Source2);
+            this.Controls.Add(this.CMB_Op1);
             this.Controls.Add(this.CMB_Source);
             this.Name = "WarningControl";
-            this.Size = new System.Drawing.Size(850, 27);
+            this.Size = new System.Drawing.Size(1062, 27);
             ((System.ComponentModel.ISupportInitialize)(this.NUM_warning)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.NUM_repeattime)).EndInit();
             this.ResumeLayout(false);
@@ -220,6 +315,60 @@ namespace MissionPlanner.Warnings
         {
             if (custwarning != null)
                 custwarning.SetField(CMB_Source.Text);
+        }
+
+        private void CMB_Source2_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (custwarning == null)
+                return;
+
+            var sel = CMB_Source2.Text;
+            if (string.IsNullOrEmpty(sel) || sel == NoExtraField)
+            {
+                custwarning.SetField2(null);
+            }
+            else
+            {
+                custwarning.SetField2(sel);
+            }
+
+            NUM_warning.Enabled = custwarning.HasExpression || !custwarning.HasSecondField;
+        }
+
+        private void CMB_Source3_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (custwarning == null)
+                return;
+
+            var sel = CMB_Source3.Text;
+            if (string.IsNullOrEmpty(sel) || sel == NoExtraField)
+            {
+                custwarning.SetField3(null);
+            }
+            else
+            {
+                custwarning.SetField3(sel);
+            }
+
+            NUM_warning.Enabled = custwarning.HasExpression || !custwarning.HasSecondField;
+        }
+
+        private void CMB_Op1_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (custwarning == null)
+                return;
+
+            custwarning.Operator1 = OpFromDisplay(CMB_Op1.Text);
+            NUM_warning.Enabled = custwarning.HasExpression || !custwarning.HasSecondField;
+        }
+
+        private void CMB_Op2_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (custwarning == null)
+                return;
+
+            custwarning.Operator2 = OpFromDisplay(CMB_Op2.Text);
+            NUM_warning.Enabled = custwarning.HasExpression || !custwarning.HasSecondField;
         }
 
         private void CMB_condition_SelectedIndexChanged(object sender, EventArgs e)
