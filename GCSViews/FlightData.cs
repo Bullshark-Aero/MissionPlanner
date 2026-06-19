@@ -468,7 +468,10 @@ namespace MissionPlanner.GCSViews
                         string desc = Settings.Instance["quickView" + f];
                         if (QV.Tag == null)
                             QV.Tag = desc;
-                        QV.desc = MainV2.comPort.MAV.cs.GetNameandUnit(desc);
+                        string savedLabel = Settings.Instance["quickView" + f + "_label"];
+                        QV.desc = !string.IsNullOrEmpty(savedLabel)
+                            ? savedLabel
+                            : MainV2.comPort.MAV.cs.GetNameandUnit(desc);
 
                         // set databinding for value
                         QV.DataBindings.Clear();
@@ -499,7 +502,10 @@ namespace MissionPlanner.GCSViews
                             string desc = QV.desc;
                             if (QV.Tag == null)
                                 QV.Tag = desc;
-                            QV.desc = MainV2.comPort.MAV.cs.GetNameandUnit(QV.Tag.ToString());
+                            string savedLabel = Settings.Instance["quickView" + f + "_label"];
+                            QV.desc = !string.IsNullOrEmpty(savedLabel)
+                                ? savedLabel
+                                : MainV2.comPort.MAV.cs.GetNameandUnit(QV.Tag.ToString());
                         }
                     }
                     catch (Exception ex)
@@ -2460,29 +2466,52 @@ namespace MissionPlanner.GCSViews
 
             if (checkbox.Checked)
             {
-                // save settings
-                Settings.Instance[((QuickView) checkbox.Tag).Name] = checkbox.Name;
+                QuickView qv = (QuickView) checkbox.Tag;
 
-                // set description
-                string desc = checkbox.Name;
-                ((QuickView) checkbox.Tag).Tag = desc;
+                // prompt for custom label while "Display This" form is still open,
+                // so Cancel returns the user to field selection
+                string defaultDesc = MainV2.comPort.MAV.cs.GetNameandUnit(checkbox.Name);
+                string savedLabel = Settings.Instance[qv.Name + "_label"];
+                string customDesc = !string.IsNullOrEmpty(savedLabel) ? savedLabel : defaultDesc;
+                if (InputBox.Show("Custom Label", "Enter a custom label (press Cancel to use default):", ref customDesc) != DialogResult.OK)
+                {
+                    // user cancelled — uncheck and leave the selection form open
+                    checkbox.BackColor = Color.Transparent;
+                    checkbox.Checked = false;
+                    return;
+                }
 
-                desc = MainV2.comPort.MAV.cs.GetNameandUnit(desc);
+                if (string.IsNullOrWhiteSpace(customDesc))
+                    customDesc = defaultDesc;
 
-                ((QuickView) checkbox.Tag).desc = desc;
+                // apply field, label, and data binding
+                Settings.Instance[qv.Name] = checkbox.Name;
+                qv.Tag = checkbox.Name;
+                qv.desc = customDesc;
+                Settings.Instance[qv.Name + "_label"] = customDesc;
 
-                // set databinding for value
-                ((QuickView) checkbox.Tag).DataBindings.Clear();
-
-                var b = new Binding("number", bindingSourceQuickTab, checkbox.Name,
-                    true);
+                qv.DataBindings.Clear();
+                var b = new Binding("number", bindingSourceQuickTab, checkbox.Name, true);
                 b.Format += new ConvertEventHandler(BindingTypeToNumber);
                 b.Parse += new ConvertEventHandler(NumberToBindingType);
+                qv.DataBindings.Add(b);
+            }
+        }
 
-                ((QuickView) checkbox.Tag).DataBindings.Add(b);
+        private void renameQuickViewLabelToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (MainV2.DisplayConfiguration.lockQuickView)
+                return;
 
-                // close selection form
-                ((Form) checkbox.Parent).Close();
+            if (!(contextMenuStripQuickView.SourceControl is QuickView qv))
+                return;
+
+            string currentDesc = qv.desc;
+            if (InputBox.Show("Rename Label", "Enter a new label for this QuickView:", ref currentDesc) == DialogResult.OK
+                && !string.IsNullOrWhiteSpace(currentDesc))
+            {
+                qv.desc = currentDesc;
+                Settings.Instance[qv.Name + "_label"] = currentDesc;
             }
         }
 

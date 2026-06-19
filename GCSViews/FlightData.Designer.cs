@@ -40,6 +40,7 @@ namespace MissionPlanner.GCSViews
             this.contextMenuStripQuickView = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.setViewCountToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.undockToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.renameQuickViewLabelToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.bindingSourceQuickTab = new System.Windows.Forms.BindingSource(this.components);
             this.quickView5 = new MissionPlanner.Controls.QuickView();
             this.quickView4 = new MissionPlanner.Controls.QuickView();
@@ -648,7 +649,8 @@ namespace MissionPlanner.GCSViews
             // 
             this.contextMenuStripQuickView.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.setViewCountToolStripMenuItem,
-            this.undockToolStripMenuItem});
+            this.undockToolStripMenuItem,
+            this.renameQuickViewLabelToolStripMenuItem});
             this.contextMenuStripQuickView.Name = "contextMenuStripQuickView";
             resources.ApplyResources(this.contextMenuStripQuickView, "contextMenuStripQuickView");
             // 
@@ -663,6 +665,12 @@ namespace MissionPlanner.GCSViews
             this.undockToolStripMenuItem.Name = "undockToolStripMenuItem";
             resources.ApplyResources(this.undockToolStripMenuItem, "undockToolStripMenuItem");
             this.undockToolStripMenuItem.Click += new System.EventHandler(this.undockDockToolStripMenuItem_Click);
+            //
+            // renameQuickViewLabelToolStripMenuItem
+            //
+            this.renameQuickViewLabelToolStripMenuItem.Name = "renameQuickViewLabelToolStripMenuItem";
+            this.renameQuickViewLabelToolStripMenuItem.Text = "Rename Label";
+            this.renameQuickViewLabelToolStripMenuItem.Click += new System.EventHandler(this.renameQuickViewLabelToolStripMenuItem_Click);
             // 
             // bindingSourceQuickTab
             // 
@@ -3167,6 +3175,7 @@ namespace MissionPlanner.GCSViews
         private System.Windows.Forms.TableLayoutPanel tableLayoutPanel2;
         private System.Windows.Forms.ToolStripMenuItem setBatteryCellCountToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem undockToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem renameQuickViewLabelToolStripMenuItem;
         private System.Windows.Forms.Button ALT_btn;
         private System.Windows.Forms.Button STBY_btn;
         private System.Windows.Forms.Button ON_btn;
