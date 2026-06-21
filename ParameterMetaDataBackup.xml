@@ -20042,6 +20042,30 @@
 		</ZIGZ_WP_DELAY>
 	</ArduCopter2>
 	<ArduPlane>
+		<FBWA_PTCH_MAX>
+			<DisplayName>FBWA maximum pitch up</DisplayName>
+			<Description>BSA: Maximum pitch-up angle in FBWA mode. Set to 0 to use the global PTCH_LIM_MAX_DEG parameter instead.</Description>
+			<Units>deg</Units>
+			<Range>0 90</Range>
+			<Increment>1</Increment>
+			<User>Standard</User>
+		</FBWA_PTCH_MAX>
+		<FBWA_PTCH_MIN>
+			<DisplayName>FBWA maximum pitch down</DisplayName>
+			<Description>BSA: Maximum pitch-down angle in FBWA mode (enter as a negative value). Set to 0 to use the global PTCH_LIM_MIN_DEG parameter instead.</Description>
+			<Units>deg</Units>
+			<Range>-90 0</Range>
+			<Increment>1</Increment>
+			<User>Standard</User>
+		</FBWA_PTCH_MIN>
+		<FBWA_ROLL_LIM>
+			<DisplayName>FBWA roll limit</DisplayName>
+			<Description>BSA: Maximum roll angle in FBWA mode. Set to 0 to use the global ROLL_LIMIT_DEG parameter instead.</Description>
+			<Units>deg</Units>
+			<Range>0 90</Range>
+			<Increment>1</Increment>
+			<User>Standard</User>
+		</FBWA_ROLL_LIM>
 		<ACRO_LOCKING>
 			<DisplayName>ACRO mode attitude locking</DisplayName>
 			<Description>Enable attitude locking when sticks are released</Description>
@@ -32906,6 +32930,44 @@
 			<Group>LOIT_</Group>
 			<Path>../libraries/AC_WPNav/AC_Loiter.cpp</Path>
 		</Q_TRANS_DECEL>
+		<Q_TRANS_DESC_EN>
+			<DisplayName>Transition descent assist enable</DisplayName>
+			<Description>BSA: Enables controlled descent during the AIRSPEED_WAIT phase of a forward transition. When enabled the VTOL motors command a descent once airspeed exceeds Q_TRANS_DESC_VS, subject to the AGL floor Q_TRANS_DESC_MN and optional altitude-loss cap Q_TRANS_DESC_MX. After transition completes the autopilot resumes normal altitude control. 0=disabled (existing behaviour), 1=enabled. Not applied to tiltrotors.</Description>
+			<Values>0:Disabled,1:Enabled</Values>
+			<User>Standard</User>
+		</Q_TRANS_DESC_EN>
+		<Q_TRANS_DESC_MN>
+			<DisplayName>Transition descent minimum AGL</DisplayName>
+			<Description>BSA: Minimum height above ground (m AGL) required for transition descent assist to be active. If the aircraft is below this height the descent rate is forced to zero. Zero disables the check.</Description>
+			<Units>m</Units>
+			<Range>0 100</Range>
+			<Increment>1</Increment>
+			<User>Standard</User>
+		</Q_TRANS_DESC_MN>
+		<Q_TRANS_DESC_MX>
+			<DisplayName>Transition descent maximum altitude loss</DisplayName>
+			<Description>BSA: Maximum total altitude (m) the aircraft is allowed to lose during a single transition descent assist activation. Once this limit is reached descent stops and the aircraft holds altitude for the remainder of AIRSPEED_WAIT. Zero disables the cap.</Description>
+			<Units>m</Units>
+			<Range>0 50</Range>
+			<Increment>1</Increment>
+			<User>Standard</User>
+		</Q_TRANS_DESC_MX>
+		<Q_TRANS_DESC_VS>
+			<DisplayName>Transition descent airspeed threshold</DisplayName>
+			<Description>BSA: Airspeed (EAS) above which the transition descent assist begins commanding a descent. Below this speed the VTOL motors hold level.</Description>
+			<Units>m/s</Units>
+			<Range>0 20</Range>
+			<Increment>0.5</Increment>
+			<User>Standard</User>
+		</Q_TRANS_DESC_VS>
+		<Q_TRANS_DESC_VZ>
+			<DisplayName>Transition descent maximum rate</DisplayName>
+			<Description>BSA: Maximum descent rate commanded to the VTOL Z controller during transition descent assist. Applied once airspeed exceeds Q_TRANS_DESC_VS.</Description>
+			<Units>m/s</Units>
+			<Range>0 5</Range>
+			<Increment>0.1</Increment>
+			<User>Standard</User>
+		</Q_TRANS_DESC_VZ>
 		<Q_TRANS_FAIL>
 			<DisplayName>Quadplane transition failure time</DisplayName>
 			<Description>Maximum time allowed for forward transitions, exceeding this time will cancel the transition and the aircraft will immediately change to the mode set by Q_TRANS_FAIL_ACT or finish the transition depending on Q_OPTIONS bit 19. 0 for no limit.</Description>
@@ -35789,6 +35851,518 @@
 			<Bitmask>0:Channel1,1:Channel2,2:Channel3,3:Channel4,4:Channel5,5:Channel6,6:Channel7,7:Channel8,8:Channel9,9:Channel10,10:Channel11,11:Channel12,12:Channel13,13:Channel14,14:Channel15,15:Channel16,16:Channel17,17:Channel18,18:Channel19,19:Channel20,20:Channel21,21:Channel22,22:Channel23,23:Channel24,24:Channel25,25:Channel26,26:Channel27,28:Channel29,29:Channel30,30:Channel31,31:Channel32</Bitmask>
 			<User>Standard</User>
 		</SERVO_VOLZ_MASK>
+		<SERVO1_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO1_ATRM_MAX>
+		<SERVO1_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO1_ATRM_MIN>
+		<SERVO2_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO2_ATRM_MAX>
+		<SERVO2_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO2_ATRM_MIN>
+		<SERVO3_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO3_ATRM_MAX>
+		<SERVO3_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO3_ATRM_MIN>
+		<SERVO4_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO4_ATRM_MAX>
+		<SERVO4_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO4_ATRM_MIN>
+		<SERVO5_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO5_ATRM_MAX>
+		<SERVO5_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO5_ATRM_MIN>
+		<SERVO6_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO6_ATRM_MAX>
+		<SERVO6_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO6_ATRM_MIN>
+		<SERVO7_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO7_ATRM_MAX>
+		<SERVO7_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO7_ATRM_MIN>
+		<SERVO8_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO8_ATRM_MAX>
+		<SERVO8_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO8_ATRM_MIN>
+		<SERVO9_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO9_ATRM_MAX>
+		<SERVO9_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO9_ATRM_MIN>
+		<SERVO10_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO10_ATRM_MAX>
+		<SERVO10_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO10_ATRM_MIN>
+		<SERVO11_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO11_ATRM_MAX>
+		<SERVO11_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO11_ATRM_MIN>
+		<SERVO12_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO12_ATRM_MAX>
+		<SERVO12_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO12_ATRM_MIN>
+		<SERVO13_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO13_ATRM_MAX>
+		<SERVO13_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO13_ATRM_MIN>
+		<SERVO14_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO14_ATRM_MAX>
+		<SERVO14_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO14_ATRM_MIN>
+		<SERVO15_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO15_ATRM_MAX>
+		<SERVO15_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO15_ATRM_MIN>
+		<SERVO16_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO16_ATRM_MAX>
+		<SERVO16_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO16_ATRM_MIN>
+		<SERVO17_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO17_ATRM_MAX>
+		<SERVO17_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO17_ATRM_MIN>
+		<SERVO18_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO18_ATRM_MAX>
+		<SERVO18_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO18_ATRM_MIN>
+		<SERVO19_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO19_ATRM_MAX>
+		<SERVO19_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO19_ATRM_MIN>
+		<SERVO20_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO20_ATRM_MAX>
+		<SERVO20_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO20_ATRM_MIN>
+		<SERVO21_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO21_ATRM_MAX>
+		<SERVO21_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO21_ATRM_MIN>
+		<SERVO22_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO22_ATRM_MAX>
+		<SERVO22_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO22_ATRM_MIN>
+		<SERVO23_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO23_ATRM_MAX>
+		<SERVO23_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO23_ATRM_MIN>
+		<SERVO24_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO24_ATRM_MAX>
+		<SERVO24_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO24_ATRM_MIN>
+		<SERVO25_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO25_ATRM_MAX>
+		<SERVO25_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO25_ATRM_MIN>
+		<SERVO26_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO26_ATRM_MAX>
+		<SERVO26_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO26_ATRM_MIN>
+		<SERVO27_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO27_ATRM_MAX>
+		<SERVO27_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO27_ATRM_MIN>
+		<SERVO28_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO28_ATRM_MAX>
+		<SERVO28_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO28_ATRM_MIN>
+		<SERVO29_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO29_ATRM_MAX>
+		<SERVO29_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO29_ATRM_MIN>
+		<SERVO30_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO30_ATRM_MAX>
+		<SERVO30_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO30_ATRM_MIN>
+		<SERVO31_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO31_ATRM_MAX>
+		<SERVO31_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO31_ATRM_MIN>
+		<SERVO32_ATRM_MAX>
+			<DisplayName>Auto-trim maximum PWM</DisplayName>
+			<Description>BSA: Highest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM up to. Set to 0 to use the default centred auto-trim upper limit (60% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO32_ATRM_MAX>
+		<SERVO32_ATRM_MIN>
+			<DisplayName>Auto-trim minimum PWM</DisplayName>
+			<Description>BSA: Lowest PWM value that SERVO_AUTO_TRIM is allowed to drive this output's SERVOn_TRIM down to. Set to 0 to use the default centred auto-trim lower limit (40% of the SERVOn_MIN to SERVOn_MAX range). This only constrains automatic trim updates; it does not change normal output scaling, manual limits, failsafe output, or SERVOn_MIN/MAX/TRIM.</Description>
+			<Units>PWM</Units>
+			<Range>0 2200</Range>
+			<Increment>1</Increment>
+			<User>Advanced</User>
+		</SERVO32_ATRM_MIN>
 		<SERVO1_FUNCTION>
 			<DisplayName>Servo output function</DisplayName>
 			<Description>Function assigned to this servo. Setting this to Disabled(0) will setup this output for control by auto missions or MAVLink servo set commands. any other value will enable the corresponding function</Description>
