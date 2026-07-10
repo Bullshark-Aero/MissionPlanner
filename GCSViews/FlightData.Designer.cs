@@ -60,6 +60,7 @@ namespace MissionPlanner.GCSViews
             this.modifyandSetSpeed = new MissionPlanner.Controls.ModifyandSet();
             this.CMB_setwp = new System.Windows.Forms.ComboBox();
             this.BUT_ARM = new MissionPlanner.Controls.MyButton();
+            this.BUT_BsaPreflight = new MissionPlanner.Controls.MyButton();
             this.BUT_mountmode = new MissionPlanner.Controls.MyButton();
             this.BUT_joystick = new MissionPlanner.Controls.MyButton();
             this.BUT_RAWSensor = new MissionPlanner.Controls.MyButton();
@@ -763,6 +764,7 @@ namespace MissionPlanner.GCSViews
             this.tableLayoutPanel1.Controls.Add(this.modifyandSetSpeed, 4, 0);
             this.tableLayoutPanel1.Controls.Add(this.CMB_setwp, 0, 1);
             this.tableLayoutPanel1.Controls.Add(this.BUT_ARM, 3, 3);
+            this.tableLayoutPanel1.Controls.Add(this.BUT_BsaPreflight, 0, 4);
             this.tableLayoutPanel1.Controls.Add(this.BUT_mountmode, 1, 3);
             this.tableLayoutPanel1.Controls.Add(this.BUT_joystick, 2, 3);
             this.tableLayoutPanel1.Controls.Add(this.BUT_RAWSensor, 3, 2);
@@ -951,6 +953,15 @@ namespace MissionPlanner.GCSViews
             this.toolTip1.SetToolTip(this.BUT_ARM, resources.GetString("BUT_ARM.ToolTip"));
             this.BUT_ARM.UseVisualStyleBackColor = true;
             this.BUT_ARM.Click += new System.EventHandler(this.BUT_ARM_Click);
+            //
+            // BUT_BsaPreflight
+            //
+            this.BUT_BsaPreflight.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.BUT_BsaPreflight.Name = "BUT_BsaPreflight";
+            this.BUT_BsaPreflight.Text = "BSA Preflight";
+            this.toolTip1.SetToolTip(this.BUT_BsaPreflight, "Run the BSA guided preflight checklist");
+            this.BUT_BsaPreflight.UseVisualStyleBackColor = true;
+            this.BUT_BsaPreflight.Click += new System.EventHandler(this.BUT_BsaPreflight_Click);
             // 
             // BUT_mountmode
             // 
@@ -3047,6 +3058,7 @@ namespace MissionPlanner.GCSViews
         private System.Windows.Forms.ToolStripMenuItem userItemsToolStripMenuItem;
         //private Crom.Controls.Docking.DockContainer dockContainer1;
         private Controls.MyButton BUT_ARM;
+        private Controls.MyButton BUT_BsaPreflight;
         private Controls.ModifyandSet modifyandSetAlt;
         private Controls.ModifyandSet modifyandSetSpeed;
         private System.Windows.Forms.ToolStripMenuItem triggerCameraToolStripMenuItem;

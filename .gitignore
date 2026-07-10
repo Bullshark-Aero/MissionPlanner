@@ -49,3 +49,5 @@ obj3/
 
 /.claude/settings.local.json
 /CLAUDE.md
+/.claude/
+/development_plan/

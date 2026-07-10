@@ -6,6 +6,9 @@ using GMap.NET.WindowsForms.Markers;
 using log4net;
 using Microsoft.Scripting.Utils;
 using MissionPlanner.ArduPilot;
+using MissionPlanner.BSA.Checks;
+using MissionPlanner.BSA.Core;
+using MissionPlanner.BSA.UI;
 using MissionPlanner.Controls;
 using MissionPlanner.GeoRef;
 using MissionPlanner.Joystick;
@@ -1077,6 +1080,38 @@ namespace MissionPlanner.GCSViews
             catch
             {
                 CustomMessageBox.Show(Strings.ErrorNoResponse, Strings.ERROR);
+            }
+        }
+
+        private void BUT_BsaPreflight_Click(object sender, EventArgs e)
+        {
+            var service = BsaPreflightService.Instance;
+            var engine = service.CurrentRun;
+            var alreadyRunning = engine != null &&
+                                  (engine.Run.State == PreflightRunState.InProgress ||
+                                   engine.Run.State == PreflightRunState.AwaitingSignOff);
+
+            if (!alreadyRunning)
+            {
+                string operatorName = "";
+                if (InputBox.Show("BSA Preflight", "Operator name:", ref operatorName) != DialogResult.OK ||
+                    string.IsNullOrWhiteSpace(operatorName))
+                    return;
+
+                try
+                {
+                    engine = BsaPreflightComposition.StartDefaultRun(operatorName);
+                }
+                catch (Exception ex)
+                {
+                    CustomMessageBox.Show("Could not start BSA preflight: " + ex.Message, Strings.ERROR);
+                    return;
+                }
+            }
+
+            using (var wizard = new PreflightWizardForm(engine))
+            {
+                wizard.ShowDialog(ParentForm);
             }
         }
 
