@@ -1,0 +1,22 @@
+{
+  "SchemaVersion": 1,
+  "Rules": [
+    {
+      "Match": "*apikey*|*api_key*|*password*|*psk*|*token*|*signing*|*secret*|*credential*",
+      "Class": "Secret"
+    },
+    {
+      "Match": "windowlocation*|lastsize*|mainheight|mainwidth|mainlocx|mainlocy|mainmaximised|flightsplitter|maplast_lat|maplast_lng|maplast_zoom",
+      "Class": "Volatile"
+    },
+    {
+      "Match": "comport*|baudrate*|*_baud|udp_port|*directory|video_device|joystick_name|guid|gcsid|kindex*|autoconnect|gstlaunchexe|gstreamer_url|mjpeg_url",
+      "Class": "MachineSpecific"
+    },
+    {
+      "Match": "speech*|distunits|speedunits|altunits|language|hud*|quickview*|advancedview|displayview|theme|terminaltheming|maptype|mapboxurl|txt_*|cmb_altmode|fpaltmode|fpcoordmouse|fpminaltwarning|enableadsb|showairports|showtfr|analyticsoptout|beta_updates|menu_autohide|gmapmarkerbase_*|joy_elevons|takeoff_alt|guided_alt*",
+      "Class": "Portable"
+    }
+  ],
+  "Default": "MachineSpecific"
+}

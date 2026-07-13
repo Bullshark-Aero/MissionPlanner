@@ -61,6 +61,7 @@ namespace MissionPlanner.GCSViews
             this.CMB_setwp = new System.Windows.Forms.ComboBox();
             this.BUT_ARM = new MissionPlanner.Controls.MyButton();
             this.BUT_BsaPreflight = new MissionPlanner.Controls.MyButton();
+            this.BUT_BsaExportConfig = new MissionPlanner.Controls.MyButton();
             this.BUT_mountmode = new MissionPlanner.Controls.MyButton();
             this.BUT_joystick = new MissionPlanner.Controls.MyButton();
             this.BUT_RAWSensor = new MissionPlanner.Controls.MyButton();
@@ -765,6 +766,7 @@ namespace MissionPlanner.GCSViews
             this.tableLayoutPanel1.Controls.Add(this.CMB_setwp, 0, 1);
             this.tableLayoutPanel1.Controls.Add(this.BUT_ARM, 3, 3);
             this.tableLayoutPanel1.Controls.Add(this.BUT_BsaPreflight, 0, 4);
+            this.tableLayoutPanel1.Controls.Add(this.BUT_BsaExportConfig, 1, 4);
             this.tableLayoutPanel1.Controls.Add(this.BUT_mountmode, 1, 3);
             this.tableLayoutPanel1.Controls.Add(this.BUT_joystick, 2, 3);
             this.tableLayoutPanel1.Controls.Add(this.BUT_RAWSensor, 3, 2);
@@ -962,7 +964,16 @@ namespace MissionPlanner.GCSViews
             this.toolTip1.SetToolTip(this.BUT_BsaPreflight, "Run the BSA guided preflight checklist");
             this.BUT_BsaPreflight.UseVisualStyleBackColor = true;
             this.BUT_BsaPreflight.Click += new System.EventHandler(this.BUT_BsaPreflight_Click);
-            // 
+            //
+            // BUT_BsaExportConfig
+            //
+            this.BUT_BsaExportConfig.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.BUT_BsaExportConfig.Name = "BUT_BsaExportConfig";
+            this.BUT_BsaExportConfig.Text = "Export MP Config";
+            this.toolTip1.SetToolTip(this.BUT_BsaExportConfig, "Export Mission Planner settings to a BSA config package");
+            this.BUT_BsaExportConfig.UseVisualStyleBackColor = true;
+            this.BUT_BsaExportConfig.Click += new System.EventHandler(this.BUT_BsaExportConfig_Click);
+            //
             // BUT_mountmode
             // 
             this.BUT_mountmode.ColorMouseDown = System.Drawing.Color.Empty;
@@ -3059,6 +3070,7 @@ namespace MissionPlanner.GCSViews
         //private Crom.Controls.Docking.DockContainer dockContainer1;
         private Controls.MyButton BUT_ARM;
         private Controls.MyButton BUT_BsaPreflight;
+        private Controls.MyButton BUT_BsaExportConfig;
         private Controls.ModifyandSet modifyandSetAlt;
         private Controls.ModifyandSet modifyandSetSpeed;
         private System.Windows.Forms.ToolStripMenuItem triggerCameraToolStripMenuItem;

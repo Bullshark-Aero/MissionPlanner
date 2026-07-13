@@ -744,6 +744,9 @@
     <Content Include="BSA\DefaultConfig\preflight_checks.default.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="BSA\DefaultConfig\bsa_key_policy.default.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="dataflashlog.xml">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>

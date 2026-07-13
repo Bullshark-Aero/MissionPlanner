@@ -1,8 +1,11 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using MissionPlanner.BSA.Config;
 using MissionPlanner.BSA.Core;
 using MissionPlanner.Utilities;
+using Newtonsoft.Json;
 
 namespace MissionPlanner.BSA.Checks
 {
@@ -54,7 +57,9 @@ namespace MissionPlanner.BSA.Checks
                 registry.Register(check);
             }
 
-            registry.Register(MpConfigApprovedPackageCheck.Create());
+            registry.Register(MpConfigApprovedPackageCheck.Create(
+                () => KeyPolicyLoader.Load(BsaConfigComposition.ResolveKeyPolicyPath()),
+                () => BsaPaths.ApprovedConfigPackagePath));
             return registry;
         }
 
@@ -72,12 +77,66 @@ namespace MissionPlanner.BSA.Checks
             return new AutoCheckEvaluator(providers);
         }
 
+        /// <summary>Metadata.ConfigVersion of a checklist file as a parseable Version, or null if the
+        /// file/JSON/version is missing or malformed. Public for test visibility.</summary>
+        public static Version ReadChecklistConfigVersion(string path)
+        {
+            try
+            {
+                var config = JsonConvert.DeserializeObject<PreflightChecklistConfig>(File.ReadAllText(path));
+                return Version.TryParse(config?.Metadata?.ConfigVersion ?? "", out var version) ? version : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        static bool _checklistStalenessNotified;
+
+        /// <summary>
+        /// The seeded user checklist is never overwritten once it exists (operator edits must survive
+        /// upgrades), which means a newer shipped default - new checks included - is silently invisible
+        /// to existing installs. This surfaces that, once per app session: tell the operator their local
+        /// checklist is older and how to adopt the new default. Never blocks or fails a run.
+        /// </summary>
+        static void WarnIfSeededChecklistStale(string userPath)
+        {
+            if (_checklistStalenessNotified)
+                return;
+
+            try
+            {
+                var shippedPath = Path.Combine(Settings.GetRunningDirectory(), DefaultChecklistRelativePath);
+                var userVersion = ReadChecklistConfigVersion(userPath);
+                var shippedVersion = ReadChecklistConfigVersion(shippedPath);
+
+                if (userVersion != null && shippedVersion != null && shippedVersion > userVersion)
+                {
+                    _checklistStalenessNotified = true;
+                    CustomMessageBox.Show(
+                        $"Your preflight checklist (v{userVersion}) is older than the shipped default (v{shippedVersion}).\n\n" +
+                        "New default checks will not appear until it is updated. To adopt the shipped default, delete:\n" +
+                        userPath + "\n" +
+                        "and start BSA Preflight again. Local edits to that file will be lost - merge them manually if you have any.",
+                        "BSA Preflight - checklist out of date");
+                }
+            }
+            catch
+            {
+                // A staleness notice must never block or fail a preflight run (including headless
+                // contexts where CustomMessageBox has no UI handler wired).
+            }
+        }
+
         public static PreflightRunEngine StartDefaultRun(string operatorName)
         {
             var missionBaselineHash = MissionSanityChecks.HashWaypoints(ToLocationwps(MainV2.comPort.MAV.wps));
 
             var registry = BuildRegistry(missionBaselineHash);
-            var config = PreflightChecklistLoader.Load(ResolveChecklistPath(), registry.Keys);
+            var checklistPath = ResolveChecklistPath();
+            WarnIfSeededChecklistStale(checklistPath);
+            var config = PreflightChecklistLoader.Load(checklistPath, registry.Keys);
             var evaluator = BuildEvaluator();
 
             return BsaPreflightService.Instance.StartRun(config.Checks, evaluator, registry, operatorName, missionBaselineHash);

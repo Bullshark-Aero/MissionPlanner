@@ -2,7 +2,7 @@
   "SchemaVersion": 1,
   "Metadata": {
     "Name": "BSA 75kg VTOL default preflight",
-    "ConfigVersion": "1.0.0"
+    "ConfigVersion": "1.1.0"
   },
   "Checks": [
     {
@@ -43,6 +43,15 @@
       "Severity": "Warning",
       "Instruction": "Confirm distance/altitude/speed units shown in Mission Planner match your operating procedure.",
       "AllowNotApplicable": false
+    },
+    {
+      "Id": "mpconfig-approved-package-match",
+      "Title": "MP config matches approved package",
+      "Type": "Auto",
+      "Severity": "Warning",
+      "Source": "MpConfig",
+      "Check": "mpconfig.approvedPackageMatch",
+      "AllowNotApplicable": true
     },
     {
       "Id": "mission-nonempty",

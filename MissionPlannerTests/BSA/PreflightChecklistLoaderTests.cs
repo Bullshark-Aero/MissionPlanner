@@ -159,7 +159,9 @@ namespace MissionPlanner.BSA.Tests
             {
                 registry.Register(check);
             }
-            registry.Register(MpConfigApprovedPackageCheck.Create());
+            registry.Register(MpConfigApprovedPackageCheck.Create(
+                () => new MissionPlanner.BSA.Config.KeyPolicyConfig { SchemaVersion = 1, Default = MissionPlanner.BSA.Config.KeyClass.MachineSpecific },
+                () => null));
 
             var config = PreflightChecklistLoader.Load(path, registry.Keys);
             Assert.IsTrue(config.Checks.Count > 0);

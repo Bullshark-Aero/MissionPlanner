@@ -13,5 +13,11 @@ namespace MissionPlanner.BSA.Core
         public static string RootDirectory => Path.Combine(Settings.GetUserDataDirectory(), "BSA");
         public static string ConfigDirectory => Path.Combine(RootDirectory, "config");
         public static string ReportsDirectory => Path.Combine(RootDirectory, "reports");
+
+        /// <summary>Single well-known slot for "this machine's approved reference config" (WP2 Phase A -
+        /// no multi-version registry yet, that's Phase B). Designating a package as approved is just
+        /// copying it here; MpConfigApprovedPackageCheck compares live config against whatever - if
+        /// anything - currently lives at this path.</summary>
+        public static string ApprovedConfigPackagePath => Path.Combine(RootDirectory, "approved_config.bsampconfig");
     }
 }

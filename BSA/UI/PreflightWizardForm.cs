@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using MissionPlanner.BSA.Config;
 using MissionPlanner.BSA.Core;
 using MissionPlanner.BSA.Checks;
 using MissionPlanner.BSA.Reports;
@@ -28,11 +29,25 @@ namespace MissionPlanner.BSA.UI
         readonly CheckStepPanel _stepPanel = new CheckStepPanel();
         readonly PreflightSignOffPanel _signOffPanel = new PreflightSignOffPanel();
 
+        // WinForms Timer (UI-thread Tick, no Invoke needed) - same pattern as
+        // Controls.PreFlight.CheckListControl's live-update timer.
+        readonly Timer _linkWatchdog = new Timer { Interval = 1000 };
+        readonly Func<bool> _linkProbe;
+        readonly string _reportsDirectory;
+        bool _linkSeenUp;
+
         bool _reportWritten;
 
-        public PreflightWizardForm(PreflightRunEngine engine)
+        /// <param name="linkProbe">Returns whether the MAVLink connection is currently open. Defaults
+        /// to MainV2.comPort.BaseStream.IsOpen (the codebase's standard connected check); injectable so
+        /// the link-loss abort path is unit-testable without a real connection.</param>
+        /// <param name="reportsDirectory">Defaults to BsaPaths.ReportsDirectory; injectable so tests
+        /// don't write reports into the real user data folder.</param>
+        public PreflightWizardForm(PreflightRunEngine engine, Func<bool> linkProbe = null, string reportsDirectory = null)
         {
             _engine = engine ?? throw new ArgumentNullException(nameof(engine));
+            _linkProbe = linkProbe ?? DefaultLinkProbe;
+            _reportsDirectory = reportsDirectory ?? BsaPaths.ReportsDirectory;
 
             Text = "BSA Preflight";
             Width = 720;
@@ -76,7 +91,65 @@ namespace MissionPlanner.BSA.UI
 
             FormClosing += OnFormClosing;
 
+            _linkWatchdog.Tick += (s, e) => PollLink();
+            _linkWatchdog.Start();
+            // Disposed (not FormClosed) - FormClosed never fires for a form whose handle was never
+            // created, which would leak the started timer in headless/test usage.
+            Disposed += (s, e) => _linkWatchdog.Dispose();
+
             ShowCurrentStep();
+        }
+
+        static bool DefaultLinkProbe()
+        {
+            try
+            {
+                return MainV2.comPort?.BaseStream?.IsOpen == true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// The third abort trigger alongside the Abort button and FormClosing: a MAVLink connection
+        /// that was up during this run and then dropped aborts the run (report still written, result
+        /// UNKNOWN). A run that never had a link (bench/offline walkaround) is deliberately not aborted
+        /// - there is no connection to lose. IsOpen catches explicit disconnects and closed ports;
+        /// silent telemetry loss on connectionless links (UDP) surfaces through the auto checks'
+        /// link-quality evaluation instead. Called by the watchdog timer; public so the abort path is
+        /// directly drivable in unit tests (same convention as MissionSanityChecks' public evaluators).
+        /// </summary>
+        public void PollLink()
+        {
+            if (_linkProbe())
+            {
+                _linkSeenUp = true;
+                return;
+            }
+
+            if (!_linkSeenUp)
+                return;
+
+            if (_engine.Run.State != PreflightRunState.InProgress && _engine.Run.State != PreflightRunState.AwaitingSignOff)
+                return;
+
+            _linkWatchdog.Stop();
+            _engine.Abort("MAVLink connection lost mid-run.");
+            EnsureFinished(isAbort: true);
+            try
+            {
+                CustomMessageBox.Show(
+                    "Telemetry link lost - the preflight run was aborted and saved with result UNKNOWN.",
+                    "BSA Preflight");
+            }
+            catch
+            {
+                // CustomMessageBox.Show throws when no UI handler is wired (headless/test context).
+                // The abort and report write above must stand regardless - swallow only the display.
+            }
+            Close();
         }
 
         void ShowCurrentStep()
@@ -192,6 +265,12 @@ namespace MissionPlanner.BSA.UI
                     "Abort preflight", CustomMessageBox.MessageBoxButtons.YesNo) != CustomMessageBox.DialogResult.Yes)
                 return;
 
+            // The link watchdog ticks during modal message loops and can abort + close this form while
+            // the confirm dialog above is open - in that case the run is already handled, and touching
+            // the disposed form would throw.
+            if (IsDisposed)
+                return;
+
             _engine.Abort("Operator clicked Abort.");
             EnsureFinished(isAbort: true);
             Close();
@@ -199,6 +278,8 @@ namespace MissionPlanner.BSA.UI
 
         void OnFormClosing(object sender, FormClosingEventArgs e)
         {
+            _linkWatchdog.Stop();
+
             if (_engine.Run.State == PreflightRunState.InProgress || _engine.Run.State == PreflightRunState.AwaitingSignOff)
                 _engine.Abort("Wizard window closed mid-run.");
 
@@ -220,6 +301,19 @@ namespace MissionPlanner.BSA.UI
             if (_reportWritten)
                 return;
 
+            // The report must never be lost because vehicle identity happens to be unreadable
+            // (disconnected mid-run, headless test context) - identity fields degrade to null instead.
+            byte? sysid = null;
+            string frameString = null;
+            try
+            {
+                sysid = MainV2.comPort?.MAV?.sysid;
+                frameString = MainV2.comPort?.MAV?.FrameString;
+            }
+            catch
+            {
+            }
+
             Exception writeError = null;
             try
             {
@@ -227,11 +321,11 @@ namespace MissionPlanner.BSA.UI
                     _engine.Run,
                     Application.ProductVersion,
                     preflightConfigHash: BsaHash.HashObject(_engine.Run.Checks),
-                    mpConfigHash: "pending-wp2",
-                    sysid: MainV2.comPort?.MAV?.sysid,
-                    frameString: MainV2.comPort?.MAV?.FrameString);
+                    mpConfigHash: BsaConfigComposition.ComputeLiveConfigHash(),
+                    sysid: sysid,
+                    frameString: frameString);
 
-                PreflightReportWriter.Write(report, BsaPaths.ReportsDirectory);
+                PreflightReportWriter.Write(report, _reportsDirectory);
                 _reportWritten = true;
             }
             catch (Exception ex)
