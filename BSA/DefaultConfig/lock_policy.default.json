@@ -1,0 +1,20 @@
+{
+  "SchemaVersion": 1,
+  "PolicyVersion": "1.0.0",
+  "Default": "Allow",
+  "Actions": {
+    "ParamWrite": [
+      { "Match": "AHRS_ORIENTATION", "Class": "Block", "InvalidatesPreflight": true },
+      { "Match": "ARSPD_AUTOCAL", "Class": "Warn", "InvalidatesPreflight": true },
+      { "Match": "TRIM_ARSPD_CM|AIRSPEED_CRUISE", "Class": "Allow" }
+    ],
+    "ParamResetDefaults": { "Class": "Block" },
+    "FirmwareUpload": { "Class": "Block" },
+    "MpSettingChange": [
+      { "Match": "speechenable->false", "Class": "Warn", "InvalidatesPreflight": true }
+    ],
+    "MissionEdit": { "Class": "Allow" },
+    "PreflightConfigEdit": { "Class": "Block" },
+    "LockPolicyEdit": { "Class": "Block" }
+  }
+}

@@ -1,5 +1,6 @@
 ﻿using log4net;
 using MissionPlanner.ArduPilot;
+using MissionPlanner.BSA.UI;
 using MissionPlanner.Comms;
 using MissionPlanner.Controls;
 using MissionPlanner.Utilities;
@@ -390,8 +391,20 @@ namespace MissionPlanner.GCSViews.ConfigurationView
 
         public static Func<List<ArduPilot.DeviceInfo>> ExtraDeviceInfo;
 
+        /// <summary>BSA Operational Lock gate (WP3) - both firmware-upload entry points
+        /// (findfirmware and Custom_firmware_label_Click) call this before doing anything.
+        /// Returns true if the upload must not proceed. LockGateUi handles Block (refusal message),
+        /// Authorise (inline Engineering passphrase prompt), and Warn (reason capture).</summary>
+        static bool FirmwareUploadBlockedByLock()
+        {
+            return !LockGateUi.AllowedToProceed("firmware_upload", null, "Firmware upload");
+        }
+
         private void findfirmware(Firmware.software fwtoupload)
         {
+            if (FirmwareUploadBlockedByLock())
+                return;
+
             var dr = CustomMessageBox.Show(Strings.AreYouSureYouWantToUpload + fwtoupload.name + Strings.QuestionMark,
                 Strings.Continue, MessageBoxButtons.YesNo);
             if (dr == (int)DialogResult.Yes)
@@ -520,6 +533,9 @@ namespace MissionPlanner.GCSViews.ConfigurationView
         //Load custom firmware (old CTRL+C shortcut)
         private void Custom_firmware_label_Click(object sender, EventArgs e)
         {
+            if (FirmwareUploadBlockedByLock())
+                return;
+
             using (var fd = new OpenFileDialog
                 {Filter = "Firmware (*.hex;*.px4;*.vrx;*.apj)|*.hex;*.px4;*.vrx;*.apj|All files (*.*)|*.*"})
             {

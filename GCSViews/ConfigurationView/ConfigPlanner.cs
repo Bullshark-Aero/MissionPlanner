@@ -1,4 +1,5 @@
 ﻿using DirectShowLib;
+using MissionPlanner.BSA.UI;
 using MissionPlanner.Controls;
 using MissionPlanner.Joystick;
 using MissionPlanner.Maps;
@@ -379,6 +380,21 @@ namespace MissionPlanner.GCSViews.ConfigurationView
 
         private void CHK_enablespeech_CheckedChanged(object sender, EventArgs e)
         {
+            // BSA Operational Lock (WP3) - this is the only real write site for "speechenable" that
+            // can produce a False transition (MainV2.cs only reads it; the two ConfigBatteryMonitoring
+            // pages only ever force it True). Gate specifically the disable transition. LockGateUi
+            // shows the WARN dialog + reason capture here (safe: plain UI-thread handler, unlike the
+            // wire-level hook), refuses on Block, and prompts for Engineering auth on Authorise.
+            if (!CHK_enablespeech.Checked)
+            {
+                if (!LockGateUi.AllowedToProceed("mp_setting_change", "speechenable->false", "Disabling audible alerts"))
+                {
+                    CHK_enablespeech.Checked = true; // revert - re-enters this handler with Checked=true,
+                                                      // which skips this gate and falls through normally.
+                    return;
+                }
+            }
+
             MainV2.speechEnable = CHK_enablespeech.Checked;
             Settings.Instance["speechenable"] = CHK_enablespeech.Checked.ToString();
             if (MainV2.speechEngine != null)
