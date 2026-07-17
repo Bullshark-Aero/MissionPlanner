@@ -710,6 +710,11 @@ namespace MissionPlanner
                 MissionPlanner.BSA.Lock.BsaLockService.Instance);
             Controls.Add(bsaLockStatusBanner);
 
+            // BSA Config Import/Export (WP2 Phase B) - Import Config / Restore Previous / Compare to
+            // Package. Same MainV2-constructor-UserControl pattern as the lock banner above; see
+            // ConfigActionsBar's doc comment for why this isn't a FlightData button.
+            Controls.Add(new MissionPlanner.BSA.UI.ConfigActionsBar());
+
             //Init Theme table and load BurntKermit as a default
             ThemeManager.thmColor = new ThemeColorTable(); //Init colortable
             ThemeManager.thmColor.InitColors(); //This fills up the table with BurntKermit defaults.

@@ -14,7 +14,51 @@
       "Class": "MachineSpecific"
     },
     {
-      "Match": "speech*|distunits|speedunits|altunits|language|hud*|quickview*|advancedview|displayview|theme|terminaltheming|maptype|mapboxurl|txt_*|cmb_altmode|fpaltmode|fpcoordmouse|fpminaltwarning|enableadsb|showairports|showtfr|analyticsoptout|beta_updates|menu_autohide|gmapmarkerbase_*|joy_elevons|takeoff_alt|guided_alt*",
+      "Match": "speech*",
+      "Class": "Portable"
+    },
+    {
+      "Match": "distunits|speedunits|altunits",
+      "Class": "Portable"
+    },
+    {
+      "Match": "hud*",
+      "Class": "Portable"
+    },
+    {
+      "Match": "guided_alt*",
+      "Class": "Portable"
+    },
+    {
+      "Match": "quickview*",
+      "Class": "Portable"
+    },
+    {
+      "Match": "gmapmarkerbase_*",
+      "Class": "Portable"
+    },
+    {
+      "Match": "language|advancedview|displayview|theme|terminaltheming|menu_autohide",
+      "Class": "Portable"
+    },
+    {
+      "Match": "maptype|mapboxurl",
+      "Class": "Portable"
+    },
+    {
+      "Match": "txt_*|cmb_altmode|fpaltmode|fpcoordmouse|fpminaltwarning|takeoff_alt",
+      "Class": "Portable"
+    },
+    {
+      "Match": "enableadsb|showairports|showtfr",
+      "Class": "Portable"
+    },
+    {
+      "Match": "analyticsoptout|beta_updates",
+      "Class": "Portable"
+    },
+    {
+      "Match": "joy_elevons",
       "Class": "Portable"
     }
   ],

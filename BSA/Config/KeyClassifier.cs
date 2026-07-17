@@ -16,16 +16,28 @@ namespace MissionPlanner.BSA.Config
         {
             if (policy == null) throw new ArgumentNullException(nameof(policy));
 
-            if (!string.IsNullOrEmpty(key))
+            var rule = FindMatchingRule(key, policy);
+            return rule?.Class ?? policy.Default ?? KeyClass.MachineSpecific;
+        }
+
+        /// <summary>The specific rule that classifies this key, or null if none matched (the key
+        /// falls to policy.Default). Used by WP2 Phase B's diff grouping - keys classified by the same
+        /// rule are grouped together in the import preview so a coupled pair (e.g. guided_alt /
+        /// guided_alt_frame, both matched by "guided_alt*") can never be applied independently.</summary>
+        public static KeyPolicyRule FindMatchingRule(string key, KeyPolicyConfig policy)
+        {
+            if (policy == null) throw new ArgumentNullException(nameof(policy));
+
+            if (string.IsNullOrEmpty(key))
+                return null;
+
+            foreach (var rule in policy.Rules ?? new System.Collections.Generic.List<KeyPolicyRule>())
             {
-                foreach (var rule in policy.Rules ?? new System.Collections.Generic.List<KeyPolicyRule>())
-                {
-                    if (GlobMatcher.MatchesAny(key, rule.Match))
-                        return rule.Class ?? policy.Default ?? KeyClass.MachineSpecific;
-                }
+                if (GlobMatcher.MatchesAny(key, rule.Match))
+                    return rule;
             }
 
-            return policy.Default ?? KeyClass.MachineSpecific;
+            return null;
         }
     }
 }

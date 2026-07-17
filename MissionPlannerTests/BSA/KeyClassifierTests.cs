@@ -95,6 +95,22 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
+        public void FindMatchingRule_ReturnsTheMatchedRule()
+        {
+            var policy = Policy(("guided_alt*", KeyClass.Portable));
+            var rule = KeyClassifier.FindMatchingRule("guided_alt_frame", policy);
+            Assert.IsNotNull(rule);
+            Assert.AreEqual("guided_alt*", rule.Match);
+        }
+
+        [TestMethod]
+        public void FindMatchingRule_NoMatch_ReturnsNull()
+        {
+            var policy = Policy(("speech*", KeyClass.Portable));
+            Assert.IsNull(KeyClassifier.FindMatchingRule("comport", policy));
+        }
+
+        [TestMethod]
         public void RuleWithNullClass_FallsToPolicyDefault()
         {
             var policy = new KeyPolicyConfig
