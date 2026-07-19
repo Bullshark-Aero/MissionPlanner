@@ -1166,6 +1166,10 @@ namespace MissionPlanner.GCSViews
                                 Path.GetFullPath(BsaPaths.ApprovedConfigPackagePath),
                                 StringComparison.OrdinalIgnoreCase))
                             File.Copy(sfd.FileName, BsaPaths.ApprovedConfigPackagePath, true);
+                        // Changing what WP1.6's approved-package check compares against is an auditable
+                        // action - CheckAction records it while the operational lock is armed (fail-open
+                        // no-op otherwise).
+                        MissionPlanner.BSA.Lock.BsaLockService.Instance.CheckAction("mp_setting_change", "set_approved_config");
                         CustomMessageBox.Show("Approved reference config updated.", "Export MP Config");
                     }
                     catch (Exception ex)

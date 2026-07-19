@@ -14,7 +14,16 @@ namespace MissionPlanner.BSA.Config
     {
         public PackageManifest Manifest { get; set; }
         public IReadOnlyDictionary<string, string> ConfigSubset { get; set; }
-        public bool HasLockPolicy { get; set; }
+
+        /// <summary>Raw text of the BSA config files carried in the package's bsa/ folder, or null if
+        /// a given file wasn't included. These are what a fresh-laptop import installs so the target
+        /// machine gets the organization's WP1 checklist / WP2 key policy / WP3 lock policy, not just
+        /// the shipped defaults - see BsaConfigInstaller.</summary>
+        public string ChecklistJson { get; set; }
+        public string KeyPolicyJson { get; set; }
+        public string LockPolicyJson { get; set; }
+
+        public bool HasLockPolicy => LockPolicyJson != null;
     }
 
     /// <summary>
@@ -29,7 +38,12 @@ namespace MissionPlanner.BSA.Config
     {
         public const string ManifestEntryName = "manifest.json";
         public const string ConfigSubsetEntryName = "mpconfig/config.subset.json";
-        public const string ChecklistEntryName = "bsa/preflight_checks.default.json";
+        // The entry carries the user's ACTIVE checklist (ResolveChecklistPath returns the seeded user
+        // copy), so the name is deliberately not ".default" - it is not the shipped default.
+        public const string ChecklistEntryName = "bsa/preflight_checks.json";
+        // Packages written before this rename used ".default"; Read still finds them via the manifest's
+        // recorded hashes, but the bsa/ text extraction below also checks this legacy name.
+        const string LegacyChecklistEntryName = "bsa/preflight_checks.default.json";
         public const string KeyPolicyEntryName = "bsa/bsa_key_policy.json";
         public const string LockPolicyEntryName = "bsa/lock_policy.json";
         public const string ReleaseNotesEntryName = "RELEASE_NOTES.md";
@@ -117,7 +131,10 @@ namespace MissionPlanner.BSA.Config
                 {
                     Manifest = manifest,
                     ConfigSubset = subset,
-                    HasLockPolicy = archive.GetEntry(LockPolicyEntryName) != null
+                    ChecklistJson = ReadEntryTextOrNull(archive, ChecklistEntryName)
+                                    ?? ReadEntryTextOrNull(archive, LegacyChecklistEntryName),
+                    KeyPolicyJson = ReadEntryTextOrNull(archive, KeyPolicyEntryName),
+                    LockPolicyJson = ReadEntryTextOrNull(archive, LockPolicyEntryName)
                 };
             }
         }
@@ -135,6 +152,12 @@ namespace MissionPlanner.BSA.Config
             using (var stream = entry.Open())
             using (var reader = new StreamReader(stream, Encoding.UTF8))
                 return reader.ReadToEnd();
+        }
+
+        static string ReadEntryTextOrNull(ZipArchive archive, string entryName)
+        {
+            var entry = archive.GetEntry(entryName);
+            return entry == null ? null : ReadEntryText(entry);
         }
 
         static string ReadTextOrThrow(string path, string label)

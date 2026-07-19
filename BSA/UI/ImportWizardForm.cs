@@ -196,7 +196,56 @@ namespace MissionPlanner.BSA.UI
             CustomMessageBox.Show(
                 $"{_appliedKeys.Count} setting(s) applied.\n\nA backup of your previous config was saved to:\n{_backupPath}",
                 "Import MP Config");
+
+            OfferBsaFileInstall();
             ShowLocalSetupStep();
+        }
+
+        /// <summary>
+        /// The package can also carry the organization's BSA config files (WP1 checklist, WP2 key
+        /// policy, WP3 lock policy) - installing them is the other half of the fresh-laptop workflow
+        /// (applying the mpconfig subset alone leaves BSA on the shipped defaults). Explicit
+        /// opt-in per the "never blindly overwrite" requirement; the current BSA files were already
+        /// captured in the pre-apply backup above. The lock policy installs unstamped and must be
+        /// re-approved in Engineering Mode before the lock will arm again (see BsaConfigInstaller).
+        /// </summary>
+        void OfferBsaFileInstall()
+        {
+            var package = _validation.Package;
+            var available = new List<string>();
+            if (package.ChecklistJson != null) available.Add("preflight checklist");
+            if (package.KeyPolicyJson != null) available.Add("config key policy");
+            if (package.LockPolicyJson != null) available.Add("operational lock policy");
+
+            if (available.Count == 0)
+                return;
+
+            var message = "This package also contains BSA configuration: " + string.Join(", ", available) + ".\n\n" +
+                          "Install these onto this machine, replacing your current BSA config? " +
+                          "(Your previous BSA config was captured in the backup taken a moment ago.)";
+            if (package.LockPolicyJson != null)
+                message += "\n\nThe imported lock policy must be re-approved in Engineering Mode (via the lock status bar's Edit Policy button) before the operational lock will arm.";
+
+            if (CustomMessageBox.Show(message, "Import MP Config",
+                    CustomMessageBox.MessageBoxButtons.YesNo) != CustomMessageBox.DialogResult.Yes)
+                return;
+
+            try
+            {
+                var result = BsaConfigComposition.InstallBsaFilesFromPackage(package,
+                    installChecklist: package.ChecklistJson != null,
+                    installKeyPolicy: package.KeyPolicyJson != null,
+                    installLockPolicy: package.LockPolicyJson != null);
+
+                CustomMessageBox.Show(
+                    "Installed: " + string.Join(", ", result.InstalledFiles) +
+                    ".\nRestart Mission Planner for the new BSA configuration to take effect.",
+                    "Import MP Config");
+            }
+            catch (Exception ex)
+            {
+                CustomMessageBox.Show("Could not install the BSA configuration files:\n" + ex.Message, "Import MP Config");
+            }
         }
 
         void ShowLocalSetupStep()

@@ -5,6 +5,7 @@ using System.Threading;
 using System.Windows.Forms;
 using MissionPlanner.BSA.Checks;
 using MissionPlanner.BSA.Core;
+using MissionPlanner.BSA.Lock;
 using MissionPlanner.Utilities;
 
 namespace MissionPlanner.BSA.Config
@@ -112,14 +113,37 @@ namespace MissionPlanner.BSA.Config
         }
 
         /// <summary>Applies approved keys to the real live Settings.config and persists via a
-        /// retry-wrapped Save() - see SaveWithRetry's doc comment for why the retry exists.</summary>
+        /// retry-wrapped Save(). A non-empty import is a configured change to the very MP config the
+        /// preflight verified (WP1.6 approved-package check + the report's mpConfigHash), so it must go
+        /// through the operational lock like any other settings change - CheckAction audits it while
+        /// armed and Invalidate drops the lock to InvalidatedPending (both fail-open no-ops when the
+        /// lock is off). Without this, Import would be a WP3 choke-point gap: an ungated settings-write
+        /// surface added after WP3 enumerated its gates (README risk R4).</summary>
         public static List<string> ApplyImport(ConfigPackageContents package, IEnumerable<string> approvedKeys)
         {
             _ = Settings.Instance;
             var policy = KeyPolicyLoader.Load(ResolveKeyPolicyPath());
             var changed = BsaConfigImporter.Apply(Settings.config, package, approvedKeys, policy);
             SaveWithRetry();
+
+            if (changed.Count > 0)
+            {
+                BsaLockService.Instance.CheckAction("mp_setting_change", "config_import");
+                BsaLockService.Instance.Invalidate("MP configuration imported while the operational lock was armed.");
+            }
+
             return changed;
+        }
+
+        /// <summary>Installs the BSA config files the package carries (checklist / key policy / lock
+        /// policy) into the real BsaPaths.ConfigDirectory - the fresh-laptop workflow's other half. See
+        /// BsaConfigInstaller for the safety properties (lock policy installed unstamped, so it must be
+        /// re-approved in Engineering Mode before the lock arms).</summary>
+        public static BsaInstallResult InstallBsaFilesFromPackage(ConfigPackageContents package,
+            bool installChecklist, bool installKeyPolicy, bool installLockPolicy)
+        {
+            return BsaConfigInstaller.Install(package, BsaPaths.ConfigDirectory,
+                installChecklist, installKeyPolicy, installLockPolicy);
         }
 
         /// <summary>Read-only view of the live config for UI display (the diff preview's before/after

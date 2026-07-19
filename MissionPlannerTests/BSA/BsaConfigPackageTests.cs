@@ -43,6 +43,11 @@ namespace MissionPlanner.BSA.Tests
                 Assert.AreEqual("0", read.ConfigSubset["distunits"]);
                 Assert.AreEqual("True", read.ConfigSubset["speechenable"]);
                 Assert.IsFalse(read.HasLockPolicy);
+
+                // bsa/ file text is extracted for the fresh-laptop install step.
+                Assert.AreEqual("{\"checklist\":true}", read.ChecklistJson);
+                Assert.AreEqual("{\"policy\":true}", read.KeyPolicyJson);
+                Assert.IsNull(read.LockPolicyJson);
             }
             finally
             {
@@ -63,7 +68,9 @@ namespace MissionPlanner.BSA.Tests
             {
                 BsaConfigPackage.Write(outputPath, new Dictionary<string, string>(), checklistPath, keyPolicyPath,
                     lockPolicyPath, "1.0.0", "op", "1.3.80", "");
-                Assert.IsTrue(BsaConfigPackage.Read(outputPath).HasLockPolicy);
+                var read = BsaConfigPackage.Read(outputPath);
+                Assert.IsTrue(read.HasLockPolicy);
+                Assert.AreEqual("{\"lock\":true}", read.LockPolicyJson);
             }
             finally
             {
