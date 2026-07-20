@@ -16,7 +16,16 @@ namespace MissionPlanner.BSA.Tests
         Dictionary<string, string> _originalConfig;
 
         [TestInitialize]
-        public void SaveConfig() => _originalConfig = new Dictionary<string, string>(Settings.config);
+        public void SaveConfig()
+        {
+            // Settings.Instance lazily loads the real config.xml on first access - force that load
+            // NOW, before any test snapshots or removes keys, or a machine with a real Engineering
+            // passphrase configured has the removed key silently restored mid-test by the lazy load
+            // (exactly how NotConfigured_IsConfiguredIsFalse started failing once this machine's
+            // passphrase was set for real).
+            var _ = Settings.Instance;
+            _originalConfig = new Dictionary<string, string>(Settings.config);
+        }
 
         [TestCleanup]
         public void RestoreConfig()

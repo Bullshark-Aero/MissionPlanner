@@ -22,7 +22,7 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
-        public void SetStatus_On_ShowsOnAndGo_GreenBackground()
+        public void SetStatus_On_ShowsOnAndGo_RedBackground()
         {
             var banner = new LockStatusBanner();
             banner.SetStatus(LockState.On, null, PreflightResult.Go, "1.0.0");
@@ -30,7 +30,7 @@ namespace MissionPlanner.BSA.Tests
             StringAssert.Contains(banner.DisplayText, "ON");
             StringAssert.Contains(banner.DisplayText, "Go");
             StringAssert.Contains(banner.DisplayText, "1.0.0");
-            Assert.AreEqual(Color.PaleGreen, banner.BackColor);
+            Assert.AreEqual(Color.Red, banner.BackColor);
         }
 
         [TestMethod]

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using MissionPlanner.BSA.Core;
 
 namespace MissionPlanner.BSA.Lock
@@ -114,9 +116,12 @@ namespace MissionPlanner.BSA.Lock
         /// <summary>The BsaLockGate delegate target - null return means allow. Never blocks the
         /// calling thread, never touches UI (see the WP3 plan's threading analysis: setParamAsync is
         /// called synchronously from UI threads via .AwaitSync(), which has no message pump). An
-        /// Authorise-classed param is refused here, not degraded to Allow: no interactive
-        /// authorisation is possible at the wire layer, and silently proceeding would weaken a rule
-        /// whose whole point is requiring a credential.</summary>
+        /// Authorise-classed param cannot be resolved interactively HERE - instead, a gated UI
+        /// surface may pre-authorise specific names via BeginParamWriteAuthorisation (passphrase
+        /// prompt happens there, before the write reaches this hook). With an active grant the write
+        /// proceeds and is audited "Authorised"; without one it is refused, never degraded to Allow -
+        /// silently proceeding would weaken a rule whose whole point is requiring a credential.
+        /// Block is refused unconditionally: a grant lifts Authorise only.</summary>
         public string CheckParamWrite(string paramName, double value)
         {
             if (State != LockState.On)
@@ -124,11 +129,21 @@ namespace MissionPlanner.BSA.Lock
 
             var decision = LockActionMatcher.MatchParamWrite(paramName, Policy);
 
+            if (decision.Class == LockClass.Authorise && IsParamWriteAuthorised(paramName))
+            {
+                Audit("param_write", paramName, decision, null, "Authorised");
+
+                if (decision.InvalidatesPreflight)
+                    Invalidate($"Parameter '{paramName}' changed under Engineering authorisation while locked.");
+
+                return null;
+            }
+
             if (decision.Class == LockClass.Block || decision.Class == LockClass.Authorise)
             {
                 Audit("param_write", paramName, decision, null, "Blocked");
                 return decision.Class == LockClass.Authorise
-                    ? $"Refused by BSA Operational Lock: '{paramName}' requires Engineering Mode authorisation, which is not available for direct parameter writes."
+                    ? $"Refused by BSA Operational Lock: '{paramName}' requires Engineering Mode authorisation. Use a gated write surface (Full Parameter List) to authorise it."
                     : $"Refused by BSA Operational Lock: '{paramName}' is blocked while locked.";
             }
 
@@ -138,6 +153,85 @@ namespace MissionPlanner.BSA.Lock
                 Invalidate($"Parameter '{paramName}' changed while locked.");
 
             return null;
+        }
+
+        // Param names currently pre-authorised for write by an Engineering-Mode gate (see
+        // BeginParamWriteAuthorisation). Refcounted so overlapping scopes for the same name can't
+        // cancel each other early; guarded by its own sync object because the wire hook may be
+        // invoked from a different thread than the UI gate that opened the scope. The lock is only
+        // ever held for a dictionary touch - never across UI or I/O - so it cannot violate
+        // BsaLockGate's never-block contract.
+        readonly Dictionary<string, int> _authorisedParamWrites = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        readonly object _authorisedParamWritesSync = new object();
+
+        bool IsParamWriteAuthorised(string paramName)
+        {
+            lock (_authorisedParamWritesSync)
+            {
+                return paramName != null && _authorisedParamWrites.ContainsKey(paramName);
+            }
+        }
+
+        /// <summary>
+        /// Opens a scope during which Authorise-classed writes to the named params are permitted at
+        /// the wire hook (audited "Authorised" per write; InvalidatesPreflight honoured per rule).
+        /// Call ONLY from a gate that has just verified the Engineering passphrase
+        /// (BSA.UI.LockGateUi.AuthoriseParamWrites) - this method deliberately performs no credential
+        /// check itself so it stays unit-testable without UI. Dispose promptly after the writes; the
+        /// grant lifts Authorise only, never Block.
+        /// </summary>
+        public IDisposable BeginParamWriteAuthorisation(IEnumerable<string> paramNames)
+        {
+            var names = (paramNames ?? Enumerable.Empty<string>())
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            lock (_authorisedParamWritesSync)
+            {
+                foreach (var name in names)
+                {
+                    _authorisedParamWrites.TryGetValue(name, out var count);
+                    _authorisedParamWrites[name] = count + 1;
+                }
+            }
+
+            return new ParamWriteAuthorisationScope(this, names);
+        }
+
+        void EndParamWriteAuthorisation(List<string> names)
+        {
+            lock (_authorisedParamWritesSync)
+            {
+                foreach (var name in names)
+                {
+                    if (!_authorisedParamWrites.TryGetValue(name, out var count))
+                        continue;
+
+                    if (count <= 1)
+                        _authorisedParamWrites.Remove(name);
+                    else
+                        _authorisedParamWrites[name] = count - 1;
+                }
+            }
+        }
+
+        sealed class ParamWriteAuthorisationScope : IDisposable
+        {
+            BsaLockService _service;
+            readonly List<string> _names;
+
+            public ParamWriteAuthorisationScope(BsaLockService service, List<string> names)
+            {
+                _service = service;
+                _names = names;
+            }
+
+            public void Dispose()
+            {
+                _service?.EndParamWriteAuthorisation(_names);
+                _service = null; // idempotent - double-dispose must not decrement twice
+            }
         }
 
         /// <summary>UI gates call this after resolving an Authorise-classed decision (see

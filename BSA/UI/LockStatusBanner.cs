@@ -190,9 +190,13 @@ namespace MissionPlanner.BSA.UI
                           (string.IsNullOrEmpty(policyVersion) ? "" : $"   |   Policy v{policyVersion}") +
                           (string.IsNullOrEmpty(lockReason) ? "" : $"   ({lockReason})");
 
-            BackColor = lockState == LockState.On ? Color.PaleGreen
+            // On uses the same red as the HUD's DISARMED text (System.Drawing.Color.Red) for visual
+            // consistency with the rest of the app's alert styling - white text for contrast against
+            // that fully-saturated background, unlike the pastel Khaki/Gainsboro states below.
+            BackColor = lockState == LockState.On ? Color.Red
                 : lockState == LockState.InvalidatedPending ? Color.Khaki
                 : Color.Gainsboro;
+            _label.ForeColor = lockState == LockState.On ? Color.White : Color.Black;
         }
     }
 }

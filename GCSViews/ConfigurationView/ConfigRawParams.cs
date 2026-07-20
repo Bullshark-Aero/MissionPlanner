@@ -311,6 +311,12 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             }
 
 
+            // BSA Operational Lock (WP3) - this is the gated confirmation surface for parameter
+            // writes: any of these params classed Authorise by the armed policy prompts once for the
+            // Engineering passphrase; the scope then pre-authorises exactly those names at the wire
+            // hook. Null scope (nothing Authorise-classed, lock off, or prompt refused) is harmless -
+            // refused Authorise params are still refused individually at the wire, as before.
+            using (LockGateUi.AuthoriseParamWrites(temp, "Writing parameters to the vehicle"))
             foreach (string value in temp)
             {
                 try

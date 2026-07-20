@@ -90,6 +90,28 @@ namespace MissionPlanner.BSA.Tests
             Assert.AreEqual(LockClass.Allow, LockActionMatcher.ResolveSingle(Policy().Actions.MissionEdit, Policy()).Class);
         }
 
+        // FirmwareUpload and ParamResetDefaults are single-shaped actions like MissionEdit -
+        // ResolveSingle is class-agnostic, so an Authorise row here proves the engine resolves it
+        // correctly for these two action ids specifically, same as it already does for MissionEdit
+        // above. The interactive passphrase prompt itself lives in BSA.UI.LockGateUi (WinForms
+        // dialogs, not unit-testable here) and is the same AllowedToProceed() call FlightPlanner's
+        // mission_edit gate already uses - live-verified via the real GUI, not re-tested here.
+        [TestMethod]
+        public void ResolveSingle_FirmwareUpload_Authorise_ReturnsAuthorise()
+        {
+            var rule = new LockActionRule { Class = LockClass.Authorise, InvalidatesPreflight = true };
+            var decision = LockActionMatcher.ResolveSingle(rule, Policy());
+            Assert.AreEqual(LockClass.Authorise, decision.Class);
+            Assert.IsTrue(decision.InvalidatesPreflight);
+        }
+
+        [TestMethod]
+        public void ResolveSingle_ParamResetDefaults_Authorise_ReturnsAuthorise()
+        {
+            var rule = new LockActionRule { Class = LockClass.Authorise };
+            Assert.AreEqual(LockClass.Authorise, LockActionMatcher.ResolveSingle(rule, Policy()).Class);
+        }
+
         [TestMethod]
         public void ResolveSingle_NullRule_FallsToDefault()
         {
