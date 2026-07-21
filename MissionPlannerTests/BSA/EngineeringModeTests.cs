@@ -82,5 +82,25 @@ namespace MissionPlanner.BSA.Tests
             Assert.IsTrue(EngineeringMode.Verify(""));
             Assert.IsFalse(EngineeringMode.Verify("not empty"));
         }
+
+        [TestMethod]
+        public void NotConfigured_DerivedIntegrityKeyIsNull()
+        {
+            Settings.config.Remove("bsa_engineering_password_set");
+            Assert.IsNull(EngineeringMode.DerivedIntegrityKey);
+        }
+
+        [TestMethod]
+        public void Configured_DerivedIntegrityKeyIsStable_AndChangesWithPassphrase()
+        {
+            EngineeringMode.SetPassphrase("correct horse battery staple");
+            var key1a = EngineeringMode.DerivedIntegrityKey;
+            var key1b = EngineeringMode.DerivedIntegrityKey;
+            CollectionAssert.AreEqual(key1a, key1b, "Must be stable across calls for the same configured passphrase.");
+
+            EngineeringMode.SetPassphrase("a different passphrase");
+            var key2 = EngineeringMode.DerivedIntegrityKey;
+            CollectionAssert.AreNotEqual(key1a, key2, "Changing the passphrase must change the derived key (used by LockPolicyIntegrity to invalidate stale approvals).");
+        }
     }
 }

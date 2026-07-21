@@ -32,18 +32,32 @@ namespace MissionPlanner.BSA.Lock
             if (!IsConfigured)
                 return false;
 
-            byte[] stored;
-            try
-            {
-                stored = Convert.FromBase64String(Settings.Instance[PasswordSettingKey] ?? "");
-            }
-            catch (FormatException)
-            {
+            var stored = StoredHash();
+            if (stored == null)
                 return false;
-            }
 
             var candidate = Password.GenerateSaltedHash(Encoding.UTF8.GetBytes(passphrase ?? ""), Salt);
             return Password.CompareByteArrays(candidate, stored);
+        }
+
+        /// <summary>Byte-for-byte the same salted hash Verify() compares candidates against - reused
+        /// by LockPolicyIntegrity as HMAC key material so a lock-policy approval stamp requires having
+        /// known the Engineering passphrase at some point, not just knowing the hashing algorithm.
+        /// Null until a passphrase has been configured at least once. This never exposes (or requires
+        /// recovering) the plaintext passphrase - it's already a one-way derivation of it, and it's the
+        /// same value this class already persists for its own authentication purpose.</summary>
+        public static byte[] DerivedIntegrityKey => IsConfigured ? StoredHash() : null;
+
+        static byte[] StoredHash()
+        {
+            try
+            {
+                return Convert.FromBase64String(Settings.Instance[PasswordSettingKey] ?? "");
+            }
+            catch (FormatException)
+            {
+                return null;
+            }
         }
     }
 }
