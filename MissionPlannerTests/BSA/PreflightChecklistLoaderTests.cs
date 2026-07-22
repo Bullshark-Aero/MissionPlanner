@@ -137,6 +137,137 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
+        public void DeclaredGroups_EveryCheckMustDeclareAKnownGroup()
+        {
+            var json = @"{
+              ""SchemaVersion"": 1,
+              ""Metadata"": { ""Name"": ""x"", ""Groups"": [""A"", ""B""] },
+              ""Checks"": [ { ""Id"": ""c1"", ""Title"": ""C1"", ""Type"": ""Manual"", ""Severity"": ""Critical"", ""Instruction"": ""x"" } ]
+            }";
+            var ex = Assert.ThrowsException<PreflightConfigException>(() => PreflightChecklistLoader.Parse(json));
+            StringAssert.Contains(ex.Message, "has no Group");
+        }
+
+        [TestMethod]
+        public void DeclaredGroups_UnknownGroupName_Throws()
+        {
+            var json = @"{
+              ""SchemaVersion"": 1,
+              ""Metadata"": { ""Name"": ""x"", ""Groups"": [""A"", ""B""] },
+              ""Checks"": [ { ""Id"": ""c1"", ""Title"": ""C1"", ""Type"": ""Manual"", ""Severity"": ""Critical"", ""Instruction"": ""x"", ""Group"": ""C"" } ]
+            }";
+            var ex = Assert.ThrowsException<PreflightConfigException>(() => PreflightChecklistLoader.Parse(json));
+            StringAssert.Contains(ex.Message, "not in Metadata.Groups");
+        }
+
+        [TestMethod]
+        public void DeclaredGroups_ValidGroupName_Parses()
+        {
+            var json = @"{
+              ""SchemaVersion"": 1,
+              ""Metadata"": { ""Name"": ""x"", ""Groups"": [""A"", ""B""] },
+              ""Checks"": [ { ""Id"": ""c1"", ""Title"": ""C1"", ""Type"": ""Manual"", ""Severity"": ""Critical"", ""Instruction"": ""x"", ""Group"": ""A"" } ]
+            }";
+            var config = PreflightChecklistLoader.Parse(json);
+            Assert.AreEqual("A", config.Checks[0].Group);
+        }
+
+        [TestMethod]
+        public void NoDeclaredGroups_CheckSetsGroupAnyway_Throws()
+        {
+            var json = @"{
+              ""SchemaVersion"": 1,
+              ""Metadata"": { ""Name"": ""x"" },
+              ""Checks"": [ { ""Id"": ""c1"", ""Title"": ""C1"", ""Type"": ""Manual"", ""Severity"": ""Critical"", ""Instruction"": ""x"", ""Group"": ""A"" } ]
+            }";
+            var ex = Assert.ThrowsException<PreflightConfigException>(() => PreflightChecklistLoader.Parse(json));
+            StringAssert.Contains(ex.Message, "Metadata.Groups is not declared");
+        }
+
+        [TestMethod]
+        public void NoDeclaredGroups_NoCheckSetsGroup_Parses()
+        {
+            // Back-compat: an ungrouped v1 checklist (no check declares Group) must keep loading -
+            // PreflightPagePlan treats it as one implicit group.
+            var config = PreflightChecklistLoader.Parse(ValidChecklist);
+            Assert.IsNull(config.Checks[0].Group);
+        }
+
+        [TestMethod]
+        public void DuplicateGroupName_Throws()
+        {
+            var json = @"{
+              ""SchemaVersion"": 1,
+              ""Metadata"": { ""Name"": ""x"", ""Groups"": [""A"", ""A""] },
+              ""Checks"": [ { ""Id"": ""c1"", ""Title"": ""C1"", ""Type"": ""Manual"", ""Severity"": ""Critical"", ""Instruction"": ""x"", ""Group"": ""A"" } ]
+            }";
+            var ex = Assert.ThrowsException<PreflightConfigException>(() => PreflightChecklistLoader.Parse(json));
+            StringAssert.Contains(ex.Message, "duplicate group name");
+        }
+
+        [TestMethod]
+        public void BlankGroupName_Throws()
+        {
+            var json = @"{
+              ""SchemaVersion"": 1,
+              ""Metadata"": { ""Name"": ""x"", ""Groups"": [""A"", ""   ""] },
+              ""Checks"": [ { ""Id"": ""c1"", ""Title"": ""C1"", ""Type"": ""Manual"", ""Severity"": ""Critical"", ""Instruction"": ""x"", ""Group"": ""A"" } ]
+            }";
+            var ex = Assert.ThrowsException<PreflightConfigException>(() => PreflightChecklistLoader.Parse(json));
+            StringAssert.Contains(ex.Message, "blank group name");
+        }
+
+        [TestMethod]
+        public void AutoGroupTitleCollidesWithDeclaredGroup_Throws()
+        {
+            var json = @"{
+              ""SchemaVersion"": 1,
+              ""Metadata"": { ""Name"": ""x"", ""Groups"": [""System checks"", ""B""] },
+              ""Checks"": [ { ""Id"": ""c1"", ""Title"": ""C1"", ""Type"": ""Manual"", ""Severity"": ""Critical"", ""Instruction"": ""x"", ""Group"": ""System checks"" } ]
+            }";
+            var ex = Assert.ThrowsException<PreflightConfigException>(() => PreflightChecklistLoader.Parse(json));
+            StringAssert.Contains(ex.Message, "collides with Metadata.AutoGroupTitle");
+        }
+
+        [TestMethod]
+        public void AutoGroupTitleCollision_DoesNotApply_WhenAutoChecksFirstIsFalse()
+        {
+            var json = @"{
+              ""SchemaVersion"": 1,
+              ""Metadata"": { ""Name"": ""x"", ""Groups"": [""System checks""], ""AutoChecksFirst"": false },
+              ""Checks"": [ { ""Id"": ""c1"", ""Title"": ""C1"", ""Type"": ""Manual"", ""Severity"": ""Critical"", ""Instruction"": ""x"", ""Group"": ""System checks"" } ]
+            }";
+            var config = PreflightChecklistLoader.Parse(json);
+            Assert.AreEqual(1, config.Checks.Count);
+        }
+
+        [TestMethod]
+        public void PageSizeLessThanOne_Throws()
+        {
+            var json = ValidChecklist.Replace("\"ConfigVersion\": \"1.0.0\"", "\"ConfigVersion\": \"1.0.0\", \"PageSize\": 0");
+            var ex = Assert.ThrowsException<PreflightConfigException>(() => PreflightChecklistLoader.Parse(json));
+            StringAssert.Contains(ex.Message, "PageSize must be at least 1");
+        }
+
+        [TestMethod]
+        public void AutoPageSizeLessThanOne_Throws()
+        {
+            var json = ValidChecklist.Replace("\"ConfigVersion\": \"1.0.0\"", "\"ConfigVersion\": \"1.0.0\", \"AutoPageSize\": -1");
+            var ex = Assert.ThrowsException<PreflightConfigException>(() => PreflightChecklistLoader.Parse(json));
+            StringAssert.Contains(ex.Message, "AutoPageSize must be at least 1");
+        }
+
+        [TestMethod]
+        public void Metadata_DefaultsApplyWhenNotSpecified()
+        {
+            var config = PreflightChecklistLoader.Parse(ValidChecklist);
+            Assert.AreEqual(5, config.Metadata.PageSize);
+            Assert.AreEqual(12, config.Metadata.AutoPageSize);
+            Assert.IsTrue(config.Metadata.AutoChecksFirst);
+            Assert.AreEqual("System checks", config.Metadata.AutoGroupTitle);
+        }
+
+        [TestMethod]
         public void FileNotFound_ThrowsPreflightConfigException()
         {
             Assert.ThrowsException<PreflightConfigException>(() =>

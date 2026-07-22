@@ -71,5 +71,19 @@ namespace MissionPlanner.BSA.Core
 
         public bool RequiresNoteOnFail { get; set; }
         public bool AllowNotApplicable { get; set; } = true;
+
+        /// <summary>Display group name. Must match one of Metadata.Groups exactly (loader-enforced)
+        /// when any group is declared; must be left unset entirely when none is. See
+        /// PreflightPagePlan. Ignored for placement if this check is hoisted to the auto page (see
+        /// AutoChecksFirst) - Group still records where it "belongs" for the sign-off summary.</summary>
+        public string Group { get; set; }
+
+        /// <summary>Auto/Semi only. True marks a check whose real answer only exists at sign-off
+        /// (e.g. mission-unchanged-during-preflight, whose comparison is a tautology moments after
+        /// the run starts). Such a check renders on its page as "verified at sign-off" instead of a
+        /// premature outcome, records Unknown with that explanation initially (never blocks page
+        /// advance), and is re-evaluated for real when the operator reaches sign-off, alongside every
+        /// other Auto check. See WP1_wizard_grouping_pagination_plan.md §4b.</summary>
+        public bool DeferredToSignOff { get; set; }
     }
 }

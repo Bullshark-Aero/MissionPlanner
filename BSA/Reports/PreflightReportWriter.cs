@@ -30,6 +30,11 @@ namespace MissionPlanner.BSA.Reports
 
             var aircraftIdNote = latest.FirstOrDefault(r => r.CheckId == WellKnownCheckIds.CorrectAircraft)?.Notes;
 
+            var autoReverifyChanges = run.Checks
+                .Where(c => c.Type == CheckType.Auto && run.HasAutoReverifyChange(c.Id))
+                .Select(c => BuildAutoReverifyEntry(run, c))
+                .ToList();
+
             return new PreflightReport
             {
                 RunId = run.RunId,
@@ -50,6 +55,7 @@ namespace MissionPlanner.BSA.Reports
                 FinalAnswers = finalAnswers,
                 FullHistory = run.History.Select(ToEntry).ToList(),
                 ChangedAnswerCheckIds = changedIds,
+                AutoReverifyChanges = autoReverifyChanges,
 
                 CriticalIssues = latest.Where(r => r.Severity == CheckSeverity.Critical && IsBlocking(r.Outcome))
                     .Select(r => r.CheckTitle).ToList(),
@@ -68,8 +74,23 @@ namespace MissionPlanner.BSA.Reports
             Outcome = r.Outcome.ToString(),
             Notes = r.Notes,
             Detail = r.Detail,
-            TimestampUtc = r.TimestampUtc
+            TimestampUtc = r.TimestampUtc,
+            Group = r.Group
         };
+
+        static AutoReverifyChangeReportEntry BuildAutoReverifyEntry(PreflightRun run, PreflightCheckDefinition check)
+        {
+            var initial = run.History.First(r => r.CheckId == check.Id && r.Source == CheckResultSource.AutoInitial);
+            var latest = run.LatestPerCheck.First(r => r.CheckId == check.Id);
+            return new AutoReverifyChangeReportEntry
+            {
+                CheckId = check.Id,
+                Title = check.Title,
+                Before = initial.Outcome.ToString(),
+                After = latest.Outcome.ToString(),
+                Detail = latest.Detail
+            };
+        }
 
         /// <returns>The JSON and HTML file paths written.</returns>
         public static (string jsonPath, string htmlPath) Write(PreflightReport report, string directory)
@@ -147,9 +168,48 @@ namespace MissionPlanner.BSA.Reports
             if (report.Warnings.Count > 0)
                 AppendList(sb, "Warnings", report.Warnings);
 
-            sb.AppendLine("<h2>Checks</h2><table><tr><th>Check</th><th>Severity</th><th>Outcome</th>" +
+            if (report.AutoReverifyChanges.Count > 0)
+            {
+                sb.AppendLine("<h2>Automatic checks re-verified at sign-off</h2>" +
+                              "<table><tr><th>Check</th><th>Was</th><th>Now</th><th>Detail</th></tr>");
+                foreach (var change in report.AutoReverifyChanges)
+                    sb.AppendLine("<tr>" +
+                                  $"<td>{EscapeHtml(change.Title)}</td>" +
+                                  $"<td class=\"{EscapeHtml(change.Before)}\">{EscapeHtml(change.Before)}</td>" +
+                                  $"<td class=\"{EscapeHtml(change.After)}\">{EscapeHtml(change.After)}</td>" +
+                                  $"<td>{EscapeHtml(change.Detail)}</td></tr>");
+                sb.AppendLine("</table>");
+            }
+
+            sb.AppendLine("<h2>Checks</h2>");
+            // Section per Group, in first-appearance order - an ungrouped checklist (every entry's
+            // Group is null) falls through to one flat table with no sub-headings, matching the
+            // pre-grouping report layout exactly.
+            if (report.FinalAnswers.Any(e => !string.IsNullOrEmpty(e.Group)))
+            {
+                foreach (var group in report.FinalAnswers.Select(e => e.Group ?? "").Distinct())
+                {
+                    sb.AppendLine($"<h3>{EscapeHtml(string.IsNullOrEmpty(group) ? "(ungrouped)" : group)}</h3>");
+                    AppendChecksTable(sb, report, report.FinalAnswers.Where(e => (e.Group ?? "") == group));
+                }
+            }
+            else
+            {
+                AppendChecksTable(sb, report, report.FinalAnswers);
+            }
+
+            if (report.ChangedAnswerCheckIds.Count > 0)
+                sb.AppendLine("<p>* answer was changed during the run - see the full history in the JSON report.</p>");
+
+            sb.AppendLine("</body></html>");
+            return sb.ToString();
+        }
+
+        static void AppendChecksTable(StringBuilder sb, PreflightReport report, IEnumerable<PreflightCheckReportEntry> entries)
+        {
+            sb.AppendLine("<table><tr><th>Check</th><th>Severity</th><th>Outcome</th>" +
                           "<th>Notes</th><th>Detail</th><th>Time (UTC)</th></tr>");
-            foreach (var entry in report.FinalAnswers)
+            foreach (var entry in entries)
             {
                 var changed = report.ChangedAnswerCheckIds.Contains(entry.CheckId);
                 sb.AppendLine("<tr" + (changed ? " class=\"changed\"" : "") + ">" +
@@ -161,11 +221,6 @@ namespace MissionPlanner.BSA.Reports
                               $"<td>{entry.TimestampUtc.ToString("u", CultureInfo.InvariantCulture)}</td></tr>");
             }
             sb.AppendLine("</table>");
-            if (report.ChangedAnswerCheckIds.Count > 0)
-                sb.AppendLine("<p>* answer was changed during the run - see the full history in the JSON report.</p>");
-
-            sb.AppendLine("</body></html>");
-            return sb.ToString();
         }
 
         static void AppendRow(StringBuilder sb, string label, string value) =>

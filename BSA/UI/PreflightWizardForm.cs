@@ -10,11 +10,12 @@ using MissionPlanner.BSA.Reports;
 namespace MissionPlanner.BSA.UI
 {
     /// <summary>
-    /// One check per step: instruction/evidence, Pass/Fail/N-A + notes, progress, abort. Reaching the
-    /// last step transitions to a sign-off summary (PreflightSignOffPanel). Every path out of this form
-    /// (Sign Off, Abort button, or closing the window mid-run) writes a report - see WP1's "every run,
-    /// including aborted, saves a report" acceptance criterion. A report-write failure blocks a Go result
-    /// from ever being published, even though CompleteRun() already computed it internally - see
+    /// One PreflightPage per step: a group rail on the left (jump between groups), several checks
+    /// per page in the center (CheckGroupPanel), progress, abort. Reaching the last page transitions
+    /// to the sign-off summary (PreflightSignOffPanel). Every path out of this form (Sign Off, Abort
+    /// button, or closing the window mid-run) writes a report - see WP1's "every run, including
+    /// aborted, saves a report" acceptance criterion. A report-write failure blocks a Go result from
+    /// ever being published, even though CompleteRun() already computed it internally - see
     /// EnsureFinished().
     /// </summary>
     public class PreflightWizardForm : Form
@@ -26,7 +27,8 @@ namespace MissionPlanner.BSA.UI
         readonly Button _btnBack = new Button { Text = "< Back", AutoSize = true };
         readonly Button _btnNext = new Button { Text = "Next >", AutoSize = true };
         readonly Button _btnAbort = new Button { Text = "Abort", AutoSize = true };
-        readonly CheckStepPanel _stepPanel = new CheckStepPanel();
+        readonly GroupRailPanel _railPanel = new GroupRailPanel();
+        readonly CheckGroupPanel _groupPanel = new CheckGroupPanel();
         readonly PreflightSignOffPanel _signOffPanel = new PreflightSignOffPanel();
 
         // WinForms Timer (UI-thread Tick, no Invoke needed) - same pattern as
@@ -50,10 +52,10 @@ namespace MissionPlanner.BSA.UI
             _reportsDirectory = reportsDirectory ?? BsaPaths.ReportsDirectory;
 
             Text = "BSA Preflight";
-            Width = 720;
-            Height = 560;
+            Width = 900;
+            Height = 680;
             StartPosition = FormStartPosition.CenterParent;
-            MinimumSize = new Size(600, 420);
+            MinimumSize = new Size(700, 480);
 
             _lblHeader.Dock = DockStyle.Top;
             _lblHeader.Height = 28;
@@ -81,23 +83,34 @@ namespace MissionPlanner.BSA.UI
             buttonRow.Controls.Add(_btnBack);
             buttonRow.Controls.Add(_btnAbort);
 
+            // Add order matters for Dock layout (later-added = higher z = laid out first, claiming
+            // its edge before earlier-added siblings) - see the class's layout comment history in
+            // WP1_wizard_grouping_pagination_plan.md §5 if this ever needs re-deriving.
             Controls.Add(_pnlContent);
+            Controls.Add(_railPanel);
             Controls.Add(buttonRow);
             Controls.Add(_lblOperator);
             Controls.Add(_lblHeader);
 
-            _stepPanel.AnswerChanged += (s, e) => UpdateNextEnabled();
+            _groupPanel.AnswerChanged += OnAnswerChanged;
+            _railPanel.GroupClicked += (s, groupName) => { _engine.GoToGroup(groupName); ShowCurrentPage(); };
             _signOffPanel.SignOffClicked += (s, e) => OnSignOffClicked();
 
             FormClosing += OnFormClosing;
 
-            _linkWatchdog.Tick += (s, e) => PollLink();
+            _linkWatchdog.Tick += (s, e) =>
+            {
+                PollLink();
+                // PollLink can abort + Close() the form on link loss - never touch it afterward.
+                if (!IsDisposed)
+                    RefreshAutoPageDisplay();
+            };
             _linkWatchdog.Start();
             // Disposed (not FormClosed) - FormClosed never fires for a form whose handle was never
             // created, which would leak the started timer in headless/test usage.
             Disposed += (s, e) => _linkWatchdog.Dispose();
 
-            ShowCurrentStep();
+            ShowCurrentPage();
         }
 
         static bool DefaultLinkProbe()
@@ -152,100 +165,76 @@ namespace MissionPlanner.BSA.UI
             Close();
         }
 
-        void ShowCurrentStep()
+        /// <summary>Keeps the System checks page's glyphs/evidence current while the operator is
+        /// looking at it, instead of frozen at whatever was true the instant the wizard opened (fixed
+        /// telemetry/mission state can take a moment to settle right after connecting or loading a
+        /// mission). Ticks on the existing 1-second link watchdog rather than a new timer - see
+        /// CheckGroupPanel.RefreshAutoRows for why this never touches the recorded audit trail.</summary>
+        void RefreshAutoPageDisplay()
         {
-            var check = _engine.CurrentCheck;
-            if (check == null)
+            var page = _engine.CurrentPage;
+            if (page != null && page.IsAutoPage)
+                _groupPanel.RefreshAutoRows(_engine);
+        }
+
+        void ShowCurrentPage()
+        {
+            var page = _engine.CurrentPage;
+            if (page == null)
             {
                 ShowSignOffPanel();
                 return;
             }
 
             _pnlContent.Controls.Clear();
-            _pnlContent.Controls.Add(_stepPanel);
+            _pnlContent.Controls.Add(_groupPanel);
+            _groupPanel.Populate(page, _engine);
+            _railPanel.Populate(_engine.Pages, _engine.Run, page.GroupName);
 
-            var suggestion = (outcome: CheckOutcome.Unknown, detail: (string)null);
-            if (check.Type != CheckType.Manual)
-                suggestion = _engine.EvaluateCurrentCheck();
-
-            // If this step already has a recorded answer (operator navigated Back to review it), that
-            // answer must win over a freshly recomputed suggestion - see CheckStepPanel.Populate's doc
-            // comment for why (silent notes loss / silent override reversal otherwise).
-            var priorAnswer = _engine.Run.LatestPerCheck.FirstOrDefault(r => r.CheckId == check.Id);
-            _stepPanel.Populate(check, suggestion.outcome, suggestion.detail, priorAnswer);
-
-            _lblHeader.Text = $"Step {_engine.Run.CurrentStepIndex + 1} of {_engine.Run.Checks.Count}: {check.Title}";
+            _lblHeader.Text = "";
             _btnBack.Enabled = _engine.CanGoPrevious;
             _btnNext.Visible = true;
-
-            if (check.Type == CheckType.Auto)
-            {
-                // Nothing for the operator to decide - record the auto-evaluated outcome immediately so
-                // Next() (which requires an answer) works without operator interaction, matching "Auto:
-                // fully automatic, no operator gate."
-                RecordAutoResult(suggestion.outcome, suggestion.detail);
-            }
-
-            UpdateNextEnabled();
+            _btnNext.Enabled = _engine.CanGoNext;
         }
 
-        void RecordAutoResult(CheckOutcome outcome, string detail)
+        void OnAnswerChanged(object sender, CheckAnswerChangedEventArgs e)
         {
-            try
-            {
-                _engine.RecordResult(outcome, detail: detail);
-            }
-            catch (InvalidOperationException)
-            {
-                // RequiresNoteOnFail on an Auto check with no operator present to supply one - record
-                // Unknown with an explanatory note rather than leaving the step unanswered and the
-                // wizard stuck (Next() requires an answer to proceed).
-                _engine.RecordResult(CheckOutcome.Unknown,
-                    notes: "Auto check failed and required a note; none available without operator input.",
-                    detail: detail);
-            }
-        }
+            if (_groupPanel.TryGetAnswer(e.CheckId, out var outcome, out var notes))
+                _engine.RecordResult(e.CheckId, outcome, notes);
 
-        void UpdateNextEnabled()
-        {
-            var check = _engine.CurrentCheck;
-            _btnNext.Enabled = check == null || check.Type == CheckType.Auto || _stepPanel.TryGetAnswer(out _, out _);
+            // Refresh the rail's live answered/total + fail markers without rebuilding the rows
+            // themselves (that would drop in-progress focus/keystrokes).
+            var page = _engine.CurrentPage;
+            if (page != null)
+                _railPanel.Populate(_engine.Pages, _engine.Run, page.GroupName);
         }
 
         void OnNextClicked()
         {
-            var check = _engine.CurrentCheck;
-            if (check != null && check.Type != CheckType.Auto)
+            if (_engine.TryAdvance(out var unansweredCheckIds))
             {
-                if (!_stepPanel.TryGetAnswer(out var outcome, out var notes))
-                    return;
-
-                try
-                {
-                    _engine.RecordResult(outcome, notes);
-                }
-                catch (InvalidOperationException ex)
-                {
-                    CustomMessageBox.Show(ex.Message, "Cannot continue");
-                    return;
-                }
+                ShowCurrentPage();
+                return;
             }
 
-            _engine.Next();
-            ShowCurrentStep();
+            _groupPanel.FlagUnanswered(unansweredCheckIds);
+            CustomMessageBox.Show(
+                $"{unansweredCheckIds.Count} check(s) on this page still need an answer.",
+                "BSA Preflight");
         }
 
         void OnBackClicked()
         {
             _engine.Previous();
-            ShowCurrentStep();
+            ShowCurrentPage();
         }
 
         void ShowSignOffPanel()
         {
             _pnlContent.Controls.Clear();
             _pnlContent.Controls.Add(_signOffPanel);
-            _signOffPanel.Populate(_engine.Run);
+            _signOffPanel.Populate(_engine);
+            _railPanel.Populate(_engine.Pages, _engine.Run, null);
 
             _lblHeader.Text = "Final sign-off";
             _btnBack.Enabled = true;
@@ -254,7 +243,17 @@ namespace MissionPlanner.BSA.UI
 
         void OnSignOffClicked()
         {
-            _engine.CompleteRun();
+            var outcome = _engine.TryCompleteRun();
+
+            if (!outcome.Completed)
+            {
+                // §4a: refused because either an Auto check moved since it was last shown, or the
+                // jump rail let the operator reach here with something unanswered. Either way, this
+                // must never read as a silently-broken button - re-populate with exactly what's wrong.
+                _signOffPanel.Populate(_engine, outcome.ChangedAutoChecks, outcome.UnansweredCheckIds);
+                return;
+            }
+
             EnsureFinished(isAbort: false);
             Close();
         }

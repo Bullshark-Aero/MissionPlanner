@@ -139,7 +139,7 @@ namespace MissionPlanner.BSA.Checks
             var config = PreflightChecklistLoader.Load(checklistPath, registry.Keys);
             var evaluator = BuildEvaluator();
 
-            return BsaPreflightService.Instance.StartRun(config.Checks, evaluator, registry, operatorName, missionBaselineHash);
+            return BsaPreflightService.Instance.StartRun(config.Checks, evaluator, registry, operatorName, missionBaselineHash, config.Metadata);
         }
     }
 }

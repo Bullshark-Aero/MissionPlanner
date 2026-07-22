@@ -115,7 +115,7 @@ namespace MissionPlanner.BSA.Tests
                 using (var form = new PreflightWizardForm(engine, linkProbe: () => linkUp, reportsDirectory: reportsDir))
                 {
                     form.PollLink();
-                    engine.RecordResult(CheckOutcome.Pass);
+                    engine.RecordResult("c1", CheckOutcome.Pass);
                     engine.Next();
                     engine.CompleteRun();
 

@@ -25,8 +25,16 @@ namespace MissionPlanner.BSA.Core
         public PreflightResult Result { get; set; } = PreflightResult.Unknown;
         public string AbortReason { get; set; }
 
-        public List<PreflightCheckDefinition> Checks { get; set; } = new List<PreflightCheckDefinition>();
-        public int CurrentStepIndex { get; set; }
+        /// <summary>Fixed at construction, never reassignable or reorderable - PreflightReportWriter
+        /// hashes this list (BsaHash.HashObject preserves array order) into every report's
+        /// PreflightConfigHash, so a display-order view (see PreflightPagePlan) must never be written
+        /// back here. IReadOnlyList makes that a compile error rather than a hoped-for convention.</summary>
+        public IReadOnlyList<PreflightCheckDefinition> Checks { get; }
+
+        /// <summary>Index into PreflightRunEngine.Pages, not into Checks - a page can hold several
+        /// checks (see PreflightPagePlan). Named CurrentPageIndex (not CurrentStepIndex) to make that
+        /// distinction unmissable at every call site.</summary>
+        public int CurrentPageIndex { get; set; }
 
         /// <summary>Append-only answer history - a given check id may appear more than once.</summary>
         public List<CheckResultRecord> History { get; } = new List<CheckResultRecord>();
@@ -43,6 +51,28 @@ namespace MissionPlanner.BSA.Core
         public IEnumerable<CheckResultRecord> LatestPerCheck =>
             History.GroupBy(r => r.CheckId).Select(g => g.Last());
 
-        public bool HasChangedAnswer(string checkId) => History.Count(r => r.CheckId == checkId) > 1;
+        /// <summary>Scoped to operator-authored answers only - re-evaluating an Auto check (page
+        /// revisit, sign-off re-verification) must never itself count as "the operator changed their
+        /// mind". See CheckResultSource and HasAutoReverifyChange for the Auto-specific signal.</summary>
+        public bool HasChangedAnswer(string checkId) =>
+            History.Count(r => r.CheckId == checkId && r.Source == CheckResultSource.Operator) > 1;
+
+        /// <summary>True if an Auto check's most recent re-verification (at AwaitingSignOff entry or
+        /// the Sign Off click - PreflightRunEngine.TryCompleteRun) disagrees with the value first
+        /// shown when its page was displayed. This is the signal a mid-run mission edit (or any other
+        /// drifted Auto value) produces - see WP1_wizard_grouping_pagination_plan.md §4.</summary>
+        public bool HasAutoReverifyChange(string checkId)
+        {
+            var initial = History.FirstOrDefault(r => r.CheckId == checkId && r.Source == CheckResultSource.AutoInitial);
+            if (initial == null) return false;
+
+            var latestReverify = History.LastOrDefault(r => r.CheckId == checkId && r.Source == CheckResultSource.AutoReverify);
+            return latestReverify != null && latestReverify.Outcome != initial.Outcome;
+        }
+
+        public PreflightRun(IReadOnlyList<PreflightCheckDefinition> checks)
+        {
+            Checks = checks ?? throw new ArgumentNullException(nameof(checks));
+        }
     }
 }

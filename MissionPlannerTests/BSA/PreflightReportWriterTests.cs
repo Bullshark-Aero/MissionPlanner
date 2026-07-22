@@ -12,14 +12,7 @@ namespace MissionPlanner.BSA.Tests
     {
         static PreflightRun BuildSampleRun()
         {
-            var run = new PreflightRun
-            {
-                StartedUtc = new DateTime(2026, 7, 9, 8, 0, 0, DateTimeKind.Utc),
-                EndedUtc = new DateTime(2026, 7, 9, 8, 5, 0, DateTimeKind.Utc),
-                State = PreflightRunState.Completed,
-                Result = PreflightResult.NoGo,
-                OperatorName = "Jane Pilot",
-                Checks = new List<PreflightCheckDefinition>
+            var run = new PreflightRun(new List<PreflightCheckDefinition>
                 {
                     new PreflightCheckDefinition
                     {
@@ -31,7 +24,13 @@ namespace MissionPlanner.BSA.Tests
                         Id = "prop-clear", Title = "Prop area clear",
                         Type = CheckType.Manual, Severity = CheckSeverity.Critical
                     }
-                }
+                })
+            {
+                StartedUtc = new DateTime(2026, 7, 9, 8, 0, 0, DateTimeKind.Utc),
+                EndedUtc = new DateTime(2026, 7, 9, 8, 5, 0, DateTimeKind.Utc),
+                State = PreflightRunState.Completed,
+                Result = PreflightResult.NoGo,
+                OperatorName = "Jane Pilot"
             };
 
             run.History.Add(new CheckResultRecord
@@ -54,6 +53,99 @@ namespace MissionPlanner.BSA.Tests
             });
 
             return run;
+        }
+
+        static PreflightRun BuildGroupedRunWithAutoReverifyChange()
+        {
+            var run = new PreflightRun(new List<PreflightCheckDefinition>
+                {
+                    new PreflightCheckDefinition
+                    {
+                        Id = "correct-aircraft", Title = "Correct aircraft",
+                        Type = CheckType.Manual, Severity = CheckSeverity.Critical, Group = "Walkaround"
+                    },
+                    new PreflightCheckDefinition
+                    {
+                        Id = "mission-unchanged", Title = "Mission unchanged",
+                        Type = CheckType.Auto, Severity = CheckSeverity.Critical, Group = "System checks"
+                    }
+                })
+            {
+                StartedUtc = new DateTime(2026, 7, 9, 8, 0, 0, DateTimeKind.Utc),
+                EndedUtc = new DateTime(2026, 7, 9, 8, 5, 0, DateTimeKind.Utc),
+                State = PreflightRunState.Completed,
+                Result = PreflightResult.NoGo,
+                OperatorName = "Jane Pilot"
+            };
+
+            run.History.Add(new CheckResultRecord
+            {
+                CheckId = "correct-aircraft", CheckTitle = "Correct aircraft", Severity = CheckSeverity.Critical,
+                Group = "Walkaround", Outcome = CheckOutcome.Pass, Notes = "BSA-001", TimestampUtc = run.StartedUtc,
+                Source = CheckResultSource.Operator
+            });
+            run.History.Add(new CheckResultRecord
+            {
+                CheckId = "mission-unchanged", CheckTitle = "Mission unchanged", Severity = CheckSeverity.Critical,
+                Group = "System checks", Outcome = CheckOutcome.Pass, Detail = "hash match", TimestampUtc = run.StartedUtc,
+                Source = CheckResultSource.AutoInitial
+            });
+            run.History.Add(new CheckResultRecord
+            {
+                CheckId = "mission-unchanged", CheckTitle = "Mission unchanged", Severity = CheckSeverity.Critical,
+                Group = "System checks", Outcome = CheckOutcome.Fail, Detail = "mission changed",
+                TimestampUtc = run.EndedUtc.Value, Source = CheckResultSource.AutoReverify
+            });
+
+            return run;
+        }
+
+        [TestMethod]
+        public void BuildReport_PopulatesGroupOnEntries()
+        {
+            var report = PreflightReportWriter.BuildReport(BuildGroupedRunWithAutoReverifyChange(), "1.3.80", "hash1", "pending-wp2", 1, "QuadPlane");
+            var entry = report.FinalAnswers.Find(e => e.CheckId == "correct-aircraft");
+            Assert.AreEqual("Walkaround", entry.Group);
+        }
+
+        [TestMethod]
+        public void BuildReport_PopulatesAutoReverifyChanges_WhenLatestDiffersFromInitial()
+        {
+            var report = PreflightReportWriter.BuildReport(BuildGroupedRunWithAutoReverifyChange(), "1.3.80", "hash1", "pending-wp2", 1, "QuadPlane");
+
+            Assert.AreEqual(1, report.AutoReverifyChanges.Count);
+            var change = report.AutoReverifyChanges[0];
+            Assert.AreEqual("mission-unchanged", change.CheckId);
+            Assert.AreEqual("Pass", change.Before);
+            Assert.AreEqual("Fail", change.After);
+        }
+
+        [TestMethod]
+        public void BuildReport_AutoReverifyChanges_EmptyWhenNothingMoved()
+        {
+            var report = PreflightReportWriter.BuildReport(BuildSampleRun(), "1.3.80", "hash1", "pending-wp2", 1, "QuadPlane");
+            Assert.AreEqual(0, report.AutoReverifyChanges.Count);
+        }
+
+        [TestMethod]
+        public void Write_Html_RendersGroupSectionHeadersAndAutoReverifySection()
+        {
+            var report = PreflightReportWriter.BuildReport(BuildGroupedRunWithAutoReverifyChange(), "1.3.80", "hash1", "pending-wp2", 1, "QuadPlane");
+            var dir = Path.Combine(Path.GetTempPath(), "BsaPreflightReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var (_, htmlPath) = PreflightReportWriter.Write(report, dir);
+                var html = File.ReadAllText(htmlPath);
+
+                StringAssert.Contains(html, "<h3>Walkaround</h3>");
+                StringAssert.Contains(html, "<h3>System checks</h3>");
+                StringAssert.Contains(html, "Automatic checks re-verified at sign-off");
+            }
+            finally
+            {
+                if (Directory.Exists(dir))
+                    Directory.Delete(dir, true);
+            }
         }
 
         [TestMethod]

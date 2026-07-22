@@ -12,6 +12,22 @@ namespace MissionPlanner.BSA.Reports
         public string Notes { get; set; }
         public string Detail { get; set; }
         public DateTime TimestampUtc { get; set; }
+
+        /// <summary>Null for an ungrouped checklist - see PreflightCheckDefinition.Group.</summary>
+        public string Group { get; set; }
+    }
+
+    /// <summary>One Auto check whose latest re-verified value (at AwaitingSignOff entry or the Sign
+    /// Off click) differs from what was first shown when its page was displayed - durable evidence
+    /// that autos were re-checked at the decision point and what moved, independent of whether that
+    /// difference ever blocked a Sign Off click. See PreflightRun.HasAutoReverifyChange.</summary>
+    public class AutoReverifyChangeReportEntry
+    {
+        public string CheckId { get; set; }
+        public string Title { get; set; }
+        public string Before { get; set; }
+        public string After { get; set; }
+        public string Detail { get; set; }
     }
 
     /// <summary>
@@ -44,6 +60,11 @@ namespace MissionPlanner.BSA.Reports
         public List<PreflightCheckReportEntry> FullHistory { get; set; } = new List<PreflightCheckReportEntry>();
 
         public List<string> ChangedAnswerCheckIds { get; set; } = new List<string>();
+
+        /// <summary>Every Auto check whose latest value moved from what its page first showed - see
+        /// AutoReverifyChangeReportEntry. Distinct from ChangedAnswerCheckIds, which is
+        /// operator-authored changes only (PreflightRun.HasChangedAnswer).</summary>
+        public List<AutoReverifyChangeReportEntry> AutoReverifyChanges { get; set; } = new List<AutoReverifyChangeReportEntry>();
 
         /// <summary>Titles of checks whose final answer is Fail/Unknown at Critical severity (drove a
         /// NoGo) or Warning severity (drove a Warning) - a scannable summary on top of FinalAnswers.</summary>

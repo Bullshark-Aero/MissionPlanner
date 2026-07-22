@@ -33,7 +33,8 @@ namespace MissionPlanner.BSA.Core
         /// wizard being opened twice).
         /// </summary>
         public PreflightRunEngine StartRun(IList<PreflightCheckDefinition> checks, AutoCheckEvaluator autoEvaluator,
-            RegisteredCheckRegistry registry, string operatorName, string missionBaselineHash = null)
+            RegisteredCheckRegistry registry, string operatorName, string missionBaselineHash = null,
+            PreflightChecklistMetadata metadata = null)
         {
             if (CurrentRun != null &&
                 (CurrentRun.Run.State == PreflightRunState.InProgress || CurrentRun.Run.State == PreflightRunState.AwaitingSignOff))
@@ -41,7 +42,7 @@ namespace MissionPlanner.BSA.Core
                 return CurrentRun;
             }
 
-            CurrentRun = new PreflightRunEngine(checks, autoEvaluator, registry, operatorName, missionBaselineHash);
+            CurrentRun = new PreflightRunEngine(checks, autoEvaluator, registry, operatorName, missionBaselineHash, metadata);
             return CurrentRun;
         }
 

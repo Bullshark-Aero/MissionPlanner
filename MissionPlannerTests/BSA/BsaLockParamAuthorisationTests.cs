@@ -47,7 +47,7 @@ namespace MissionPlanner.BSA.Tests
             };
             var evaluator = new AutoCheckEvaluator(new Dictionary<CheckSource, IValueProvider>());
             var engine = new PreflightRunEngine(new[] { check }, evaluator, new RegisteredCheckRegistry(), "Test Operator");
-            engine.RecordResult(CheckOutcome.Pass);
+            engine.RecordResult("c1", CheckOutcome.Pass);
             engine.Next();
             engine.CompleteRun();
             service.PublishResult(engine);

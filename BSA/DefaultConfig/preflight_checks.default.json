@@ -2,7 +2,15 @@
   "SchemaVersion": 1,
   "Metadata": {
     "Name": "BSA 75kg VTOL default preflight",
-    "ConfigVersion": "1.1.0"
+    "ConfigVersion": "1.2.0",
+    "Groups": [
+      "Identity & Configuration",
+      "Telemetry & Sensors",
+      "Mission",
+      "Walkaround",
+      "Control Surfaces",
+      "Payload & Arming"
+    ]
   },
   "Checks": [
     {
@@ -10,6 +18,7 @@
       "Title": "Correct aircraft connected",
       "Type": "Manual",
       "Severity": "Critical",
+      "Group": "Identity & Configuration",
       "Instruction": "Confirm the tail number / airframe ID of the connected vehicle matches the mission and paperwork for this flight. Note the aircraft ID below - it is recorded as this run's aircraft identity.",
       "RequiresNoteOnFail": true,
       "AllowNotApplicable": false
@@ -19,6 +28,7 @@
       "Title": "Telemetry link healthy",
       "Type": "Auto",
       "Severity": "Warning",
+      "Group": "Telemetry & Sensors",
       "Source": "Telemetry",
       "Field": "linkqualitygcs",
       "Condition": "GTEQ",
@@ -30,6 +40,7 @@
       "Title": "Audible alerts enabled",
       "Type": "Auto",
       "Severity": "Warning",
+      "Group": "Identity & Configuration",
       "Source": "MpConfig",
       "Field": "speechenable",
       "Condition": "EQ",
@@ -41,6 +52,7 @@
       "Title": "Display units configured correctly",
       "Type": "Manual",
       "Severity": "Warning",
+      "Group": "Identity & Configuration",
       "Instruction": "Confirm distance/altitude/speed units shown in Mission Planner match your operating procedure.",
       "AllowNotApplicable": false
     },
@@ -49,6 +61,7 @@
       "Title": "MP config matches approved package",
       "Type": "Auto",
       "Severity": "Warning",
+      "Group": "Identity & Configuration",
       "Source": "MpConfig",
       "Check": "mpconfig.approvedPackageMatch",
       "AllowNotApplicable": true
@@ -58,6 +71,7 @@
       "Title": "Mission is loaded and not empty",
       "Type": "Auto",
       "Severity": "Critical",
+      "Group": "Mission",
       "Source": "Mission",
       "Check": "mission.nonempty",
       "AllowNotApplicable": false
@@ -67,6 +81,7 @@
       "Title": "Mission has takeoff and landing",
       "Type": "Auto",
       "Severity": "Critical",
+      "Group": "Mission",
       "Source": "Mission",
       "Check": "mission.hasTakeoffAndLanding",
       "AllowNotApplicable": false
@@ -76,6 +91,7 @@
       "Title": "Mission home position is plausible",
       "Type": "Auto",
       "Severity": "Warning",
+      "Group": "Mission",
       "Source": "Mission",
       "Check": "mission.homePlausible",
       "AllowNotApplicable": true
@@ -85,6 +101,7 @@
       "Title": "Geofence loaded",
       "Type": "Auto",
       "Severity": "Info",
+      "Group": "Mission",
       "Source": "Mission",
       "Check": "mission.fencePresent",
       "AllowNotApplicable": true
@@ -94,6 +111,7 @@
       "Title": "Rally points loaded",
       "Type": "Auto",
       "Severity": "Info",
+      "Group": "Mission",
       "Source": "Mission",
       "Check": "mission.rallyPresent",
       "AllowNotApplicable": true
@@ -103,6 +121,7 @@
       "Title": "Battery status visible and acceptable",
       "Type": "Semi",
       "Severity": "Warning",
+      "Group": "Telemetry & Sensors",
       "Source": "Telemetry",
       "Field": "battery_remaining",
       "Condition": "GTEQ",
@@ -115,6 +134,7 @@
       "Title": "GPS/EKF status visible and healthy",
       "Type": "Semi",
       "Severity": "Warning",
+      "Group": "Telemetry & Sensors",
       "Source": "Telemetry",
       "Field": "ekfstatus",
       "Condition": "LT",
@@ -127,6 +147,7 @@
       "Title": "Walkaround: nose section",
       "Type": "Manual",
       "Severity": "Critical",
+      "Group": "Walkaround",
       "Instruction": "Check nose structure, pitot/static area, antennas and fasteners. Record any defect in the notes.",
       "RequiresNoteOnFail": true,
       "AllowNotApplicable": false
@@ -136,6 +157,7 @@
       "Title": "Walkaround: fuselage and tail",
       "Type": "Manual",
       "Severity": "Critical",
+      "Group": "Walkaround",
       "Instruction": "Check fuselage skin, access panels, tail structure and control horns for damage or loose fasteners.",
       "RequiresNoteOnFail": true,
       "AllowNotApplicable": false
@@ -145,6 +167,7 @@
       "Title": "Walkaround: wings and control surfaces",
       "Type": "Manual",
       "Severity": "Critical",
+      "Group": "Walkaround",
       "Instruction": "Check wing structure, control surface hinges and linkages for damage, play or obstruction.",
       "RequiresNoteOnFail": true,
       "AllowNotApplicable": false
@@ -154,6 +177,7 @@
       "Title": "Walkaround: landing gear",
       "Type": "Manual",
       "Severity": "Critical",
+      "Group": "Walkaround",
       "Instruction": "Check landing gear/skids for damage and secure attachment.",
       "RequiresNoteOnFail": true,
       "AllowNotApplicable": false
@@ -163,6 +187,7 @@
       "Title": "Commanded surface movement: aileron",
       "Type": "Manual",
       "Severity": "Critical",
+      "Group": "Control Surfaces",
       "Instruction": "Aircraft disarmed. Move the aileron stick left, then right. Confirm each aileron moves the correct direction, moves smoothly and returns to neutral.",
       "RequiresNoteOnFail": true,
       "AllowNotApplicable": false
@@ -172,6 +197,7 @@
       "Title": "Commanded surface movement: elevator",
       "Type": "Manual",
       "Severity": "Critical",
+      "Group": "Control Surfaces",
       "Instruction": "Aircraft disarmed. Move the elevator stick up, then down. Confirm the elevator moves the correct direction, moves smoothly and returns to neutral.",
       "RequiresNoteOnFail": true,
       "AllowNotApplicable": false
@@ -181,6 +207,7 @@
       "Title": "Commanded surface movement: rudder",
       "Type": "Manual",
       "Severity": "Critical",
+      "Group": "Control Surfaces",
       "Instruction": "Aircraft disarmed. Move the rudder stick left, then right. Confirm the rudder moves the correct direction, moves smoothly and returns to neutral.",
       "RequiresNoteOnFail": true,
       "AllowNotApplicable": false
@@ -190,6 +217,7 @@
       "Title": "Payload and battery secured",
       "Type": "Manual",
       "Severity": "Critical",
+      "Group": "Payload & Arming",
       "Instruction": "Confirm payload and flight battery are correctly seated and secured, with no possibility of shifting in flight.",
       "RequiresNoteOnFail": true,
       "AllowNotApplicable": false
@@ -199,6 +227,7 @@
       "Title": "Propeller/rotor area clear",
       "Type": "Manual",
       "Severity": "Critical",
+      "Group": "Payload & Arming",
       "Instruction": "Confirm propeller/rotor discs are clear of obstructions, tools and people before arming.",
       "RequiresNoteOnFail": true,
       "AllowNotApplicable": false
@@ -208,9 +237,11 @@
       "Title": "Mission unchanged during preflight",
       "Type": "Auto",
       "Severity": "Critical",
+      "Group": "Mission",
       "Source": "Mission",
       "Check": "mission.unchangedDuringPreflight",
-      "AllowNotApplicable": false
+      "AllowNotApplicable": false,
+      "DeferredToSignOff": true
     }
   ]
 }

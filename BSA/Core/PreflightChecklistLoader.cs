@@ -94,6 +94,36 @@ namespace MissionPlanner.BSA.Core
                 yield break;
             }
 
+            var metadata = config.Metadata ?? new PreflightChecklistMetadata();
+
+            if (metadata.PageSize < 1)
+                yield return $"Metadata.PageSize must be at least 1 (was {metadata.PageSize}).";
+            if (metadata.AutoPageSize < 1)
+                yield return $"Metadata.AutoPageSize must be at least 1 (was {metadata.AutoPageSize}).";
+
+            var declaredGroups = metadata.Groups ?? new List<string>();
+            var hasDeclaredGroups = declaredGroups.Count > 0;
+
+            if (hasDeclaredGroups)
+            {
+                var seenGroupNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var group in declaredGroups)
+                {
+                    if (string.IsNullOrWhiteSpace(group))
+                        yield return "Metadata.Groups contains a blank group name.";
+                    else if (!seenGroupNames.Add(group))
+                        yield return $"Metadata.Groups contains a duplicate group name '{group}'.";
+                }
+
+                if (metadata.AutoChecksFirst && !string.IsNullOrWhiteSpace(metadata.AutoGroupTitle) &&
+                    declaredGroups.Any(g => string.Equals(g, metadata.AutoGroupTitle, StringComparison.OrdinalIgnoreCase)))
+                {
+                    yield return $"Metadata.Groups contains '{metadata.AutoGroupTitle}', which collides with " +
+                                 "Metadata.AutoGroupTitle (the synthetic page auto checks are hoisted onto).";
+                }
+            }
+
+            var declaredGroupSet = new HashSet<string>(declaredGroups, StringComparer.OrdinalIgnoreCase);
             var knownKeys = knownRegisteredCheckKeys == null
                 ? null
                 : new HashSet<string>(knownRegisteredCheckKeys, StringComparer.OrdinalIgnoreCase);
@@ -103,6 +133,27 @@ namespace MissionPlanner.BSA.Core
             {
                 foreach (var error in ValidateCheck(check, seenIds, knownKeys))
                     yield return error;
+
+                foreach (var error in ValidateGroup(check, hasDeclaredGroups, declaredGroupSet))
+                    yield return error;
+            }
+        }
+
+        static IEnumerable<string> ValidateGroup(PreflightCheckDefinition check, bool hasDeclaredGroups, HashSet<string> declaredGroupSet)
+        {
+            var label = string.IsNullOrWhiteSpace(check.Id) ? (check.Title ?? "<unnamed check>") : check.Id;
+
+            if (hasDeclaredGroups)
+            {
+                if (string.IsNullOrWhiteSpace(check.Group))
+                    yield return $"Check '{label}' has no Group, but Metadata.Groups is declared - every check needs one.";
+                else if (!declaredGroupSet.Contains(check.Group))
+                    yield return $"Check '{label}' references group '{check.Group}', which is not in Metadata.Groups.";
+            }
+            else if (!string.IsNullOrWhiteSpace(check.Group))
+            {
+                yield return $"Check '{label}' sets Group '{check.Group}', but Metadata.Groups is not declared - " +
+                             "either declare Metadata.Groups for the whole checklist or remove Group from every check.";
             }
         }
 

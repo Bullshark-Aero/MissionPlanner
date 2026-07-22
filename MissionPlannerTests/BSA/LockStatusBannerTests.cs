@@ -88,7 +88,7 @@ namespace MissionPlanner.BSA.Tests
                 var check = new PreflightCheckDefinition { Id = "c1", Title = "c1", Type = CheckType.Manual, Severity = CheckSeverity.Critical, Instruction = "x" };
                 var evaluator = new AutoCheckEvaluator(new Dictionary<CheckSource, IValueProvider>());
                 var engine = new PreflightRunEngine(new[] { check }, evaluator, new RegisteredCheckRegistry(), "Test Operator");
-                engine.RecordResult(CheckOutcome.Pass);
+                engine.RecordResult("c1", CheckOutcome.Pass);
                 engine.Next();
                 engine.CompleteRun();
                 preflightService.PublishResult(engine);

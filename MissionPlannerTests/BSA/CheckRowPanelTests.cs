@@ -6,7 +6,7 @@ using MissionPlanner.BSA.UI;
 namespace MissionPlanner.BSA.Tests
 {
     [TestClass]
-    public class CheckStepPanelTests
+    public class CheckRowPanelTests
     {
         static PreflightCheckDefinition ManualCheck(bool allowNa = true) => new PreflightCheckDefinition
         {
@@ -41,7 +41,7 @@ namespace MissionPlanner.BSA.Tests
         [TestMethod]
         public void PriorAnswer_RestoresNotesAndOutcome_OverridingFreshSuggestion()
         {
-            var panel = new CheckStepPanel();
+            var panel = new CheckRowPanel();
             var check = ManualCheck();
             var prior = Record(CheckOutcome.Pass, "BSA-001");
 
@@ -57,7 +57,7 @@ namespace MissionPlanner.BSA.Tests
         [TestMethod]
         public void PriorAnswer_TakesPrecedenceOverFreshAutoSuggestion_ForSemiChecks()
         {
-            var panel = new CheckStepPanel();
+            var panel = new CheckRowPanel();
             var check = SemiCheck();
             // Operator previously overrode a Fail auto-suggestion to Pass with a justification.
             var prior = Record(CheckOutcome.Pass, "Backup pack installed, verified adequate.");
@@ -74,7 +74,7 @@ namespace MissionPlanner.BSA.Tests
         [TestMethod]
         public void NoPriorAnswer_FirstVisit_FallsBackToFreshSuggestion()
         {
-            var panel = new CheckStepPanel();
+            var panel = new CheckRowPanel();
             var check = SemiCheck();
 
             panel.Populate(check, CheckOutcome.Pass, "battery_remaining = 90 (need >= 50)", null);
@@ -87,7 +87,7 @@ namespace MissionPlanner.BSA.Tests
         [TestMethod]
         public void PriorAnswer_NotApplicable_IsRestored()
         {
-            var panel = new CheckStepPanel();
+            var panel = new CheckRowPanel();
             var check = ManualCheck(allowNa: true);
             var prior = Record(CheckOutcome.NotApplicable, "N/A for this airframe.");
 
