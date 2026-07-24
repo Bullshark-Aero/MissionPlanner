@@ -86,21 +86,11 @@ namespace MissionPlanner.BSA.UI
 
             var parts = new List<string>();
             foreach (var key in group.MismatchedKeys)
-                parts.Add($"{key} '{Preview(liveValues, key)}' -> '{Preview(packageValues, key)}'");
+                parts.Add($"{key} '{ConfigValueDisplay.Preview(liveValues, key)}' -> '{ConfigValueDisplay.Preview(packageValues, key)}'");
             foreach (var key in group.PackageOnlyKeys)
-                parts.Add($"{key} (new) = '{Preview(packageValues, key)}'");
+                parts.Add($"{key} (new) = '{ConfigValueDisplay.Preview(packageValues, key)}'");
 
             return string.Join(";  ", parts);
-        }
-
-        /// <summary>Values can be huge (e.g. displayview is an embedded JSON blob) - truncate for the
-        /// single-line row; the full value still applies, this is display only.</summary>
-        static string Preview(IReadOnlyDictionary<string, string> values, string key)
-        {
-            if (values == null || !values.TryGetValue(key, out var value) || value == null)
-                return "";
-
-            return value.Length > 24 ? value.Substring(0, 21) + "..." : value;
         }
     }
 }
