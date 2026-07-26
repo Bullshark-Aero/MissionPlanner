@@ -107,5 +107,113 @@ namespace MissionPlanner.BSA.Tests
             panel.SelectNone();
             Assert.AreEqual(0, panel.GetSelectedKeys().Count);
         }
+
+        [TestMethod]
+        public void SelectAll_RespectsSearchFilter_HiddenGroupsNotChecked()
+        {
+            var panel = new ImportDiffPanel();
+            Populate(panel, new List<ConfigDiffGroup>
+            {
+                Group("g1", mismatched: new[] { "distunits" }),
+                Group("g2", mismatched: new[] { "speechenable" })
+            });
+
+            panel.SearchFilter = "dist";
+            panel.SelectAll();
+
+            panel.SearchFilter = ""; // clear filter to inspect the full selection
+            var selected = panel.GetSelectedKeys();
+
+            CollectionAssert.Contains(selected, "distunits");
+            CollectionAssert.DoesNotContain(selected, "speechenable",
+                "SelectAll while filtered by search must not check groups hidden by the filter.");
+            Assert.AreEqual(1, selected.Count);
+        }
+
+        [TestMethod]
+        public void SelectAll_RespectsStatusFilter_HiddenApplicableGroupNotChecked()
+        {
+            var panel = new ImportDiffPanel();
+            Populate(panel, new List<ConfigDiffGroup>
+            {
+                Group("g1", mismatched: new[] { "distunits" }),
+                Group("g2", liveOnly: new[] { "comport" })
+            });
+
+            panel.StatusFilter = 3; // Info only - hides the applicable g1 row
+            panel.SelectAll();
+
+            panel.StatusFilter = 0; // All
+            Assert.AreEqual(0, panel.GetSelectedKeys().Count,
+                "SelectAll while filtered to Info-only rows must not check the hidden applicable group.");
+        }
+
+        [TestMethod]
+        public void HasAnyApplicableGroup_UnaffectedByActiveFilter()
+        {
+            var panel = new ImportDiffPanel();
+            Populate(panel, new List<ConfigDiffGroup> { Group("g1", mismatched: new[] { "distunits" }) });
+
+            panel.StatusFilter = 3; // Info only - hides the one applicable group from the view
+            Assert.IsTrue(panel.HasAnyApplicableGroup,
+                "HasAnyApplicableGroup must reflect the full group set, not the current filtered view.");
+        }
+
+        [TestMethod]
+        public void SetGroupChecked_WorksByOriginalIndex_EvenWhenFilteredOutOfView()
+        {
+            var panel = new ImportDiffPanel();
+            Populate(panel, new List<ConfigDiffGroup>
+            {
+                Group("g1", mismatched: new[] { "distunits" }),
+                Group("g2", mismatched: new[] { "speechenable" })
+            });
+
+            panel.SearchFilter = "speech"; // hides g1 (index 0) from the current view
+            panel.SetGroupChecked(0, true);
+
+            panel.SearchFilter = "";
+            CollectionAssert.Contains(panel.GetSelectedKeys(), "distunits",
+                "SetGroupChecked indexes the original Populate() order, independent of any active filter.");
+        }
+
+        [TestMethod]
+        public void MixedGroup_LiveOnlyKeyNeverSelected_EvenWhenGroupChecked()
+        {
+            var panel = new ImportDiffPanel();
+            Populate(panel, new List<ConfigDiffGroup>
+            {
+                Group("g1", mismatched: new[] { "distunits" }, liveOnly: new[] { "speedunits" })
+            });
+
+            panel.SetGroupChecked(0, true);
+            var selected = panel.GetSelectedKeys();
+
+            CollectionAssert.Contains(selected, "distunits");
+            CollectionAssert.DoesNotContain(selected, "speedunits",
+                "A LiveOnly key within an otherwise-applicable group has no package value and must never be selected, even though it now gets its own display row.");
+            Assert.AreEqual(1, selected.Count);
+        }
+
+        [TestMethod]
+        public void SelectAll_ChecksWholeCoupledGroup_EvenWhenOnlyOneOfItsRowsIsVisible()
+        {
+            var panel = new ImportDiffPanel();
+            Populate(panel, new List<ConfigDiffGroup>
+            {
+                Group("g1", mismatched: new[] { "guided_alt", "guided_alt_frame" })
+            });
+
+            panel.SearchFilter = "guided_alt_frame"; // matches only one of the two coupled keys
+            panel.SelectAll();
+
+            panel.SearchFilter = "";
+            var selected = panel.GetSelectedKeys();
+
+            CollectionAssert.Contains(selected, "guided_alt");
+            CollectionAssert.Contains(selected, "guided_alt_frame");
+            Assert.AreEqual(2, selected.Count,
+                "SelectAll must check the WHOLE group once any one of its rows is visible - a coupled pair must never end up half-selected.");
+        }
     }
 }

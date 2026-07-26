@@ -18,7 +18,15 @@
       "Class": "Portable"
     },
     {
-      "Match": "distunits|speedunits|altunits",
+      "Match": "distunits",
+      "Class": "Portable"
+    },
+    {
+      "Match": "speedunits",
+      "Class": "Portable"
+    },
+    {
+      "Match": "altunits",
       "Class": "Portable"
     },
     {

@@ -43,10 +43,10 @@ namespace MissionPlanner.BSA.UI
             _validation = validation ?? throw new ArgumentNullException(nameof(validation));
 
             Text = "Import MP Config";
-            Width = 640;
-            Height = 520;
+            Width = 760;
+            Height = 560;
             StartPosition = FormStartPosition.CenterParent;
-            MinimumSize = new Size(560, 400);
+            MinimumSize = new Size(640, 420);
 
             _lblHeader.Dock = DockStyle.Top;
             _lblHeader.Height = 28;

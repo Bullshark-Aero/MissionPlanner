@@ -26,10 +26,14 @@ namespace MissionPlanner.BSA.Config
     /// <summary>
     /// Groups a compare result by matching key-policy rule rather than per-key, so the import preview
     /// can never let an operator apply half of a coupled pair (see ConfigDiffGroup's doc comment).
-    /// Coarser than a hand-curated pairing model - e.g. distunits/speedunits/altunits get bundled
-    /// together despite being logically independent - but this is a deliberate, documented trade-off:
-    /// it can over-group unrelated keys, but it can never split a genuinely coupled pair, since any
-    /// two keys sharing a rule always move together.
+    /// Coarser than a hand-curated pairing model - a policy rule that lumps several keys together
+    /// (e.g. a site-authored override) would bundle them into one apply-unit even if they're not
+    /// actually coupled in code, which is a deliberate, documented trade-off: it can over-group
+    /// unrelated keys, but it can never split a genuinely coupled pair like guided_alt/
+    /// guided_alt_frame, since any two keys sharing a rule always move together. The shipped default
+    /// policy (bsa_key_policy.default.json) keeps keys that aren't actually written together in code
+    /// - e.g. distunits/speedunits/altunits - as separate rules specifically to avoid this
+    /// over-grouping where it isn't needed.
     /// </summary>
     public static class ConfigDiffGrouping
     {
