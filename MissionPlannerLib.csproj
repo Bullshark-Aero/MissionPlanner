@@ -628,9 +628,6 @@
     <None Update="camerasBuiltin.xml">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Update="checklistDefault.xml">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
     <None Update="dataflashlog.xml">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

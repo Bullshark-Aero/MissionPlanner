@@ -1134,8 +1134,6 @@ namespace MissionPlanner
 
             CustomWarning.defaultsrc = MainV2.comPort.MAV.cs;
 
-            MissionPlanner.Controls.PreFlight.CheckListItem.defaultsrc = MainV2.comPort.MAV.cs;
-
             // when uploading a firmware we dont want to reload this screen.
             if (instance.MyView.current.Control != null &&
                 instance.MyView.current.Control.GetType() == typeof(GCSViews.InitialSetup))

@@ -522,10 +522,9 @@ namespace MissionPlanner.GCSViews
 
             CheckBatteryShow();
 
-            // make sure the hud user items/warnings/checklist are using the current state
+            // make sure the hud user items/warnings are using the current state
             HUD.Custom.src = MainV2.comPort.MAV.cs;
             CustomWarning.defaultsrc = MainV2.comPort.MAV.cs;
-            MissionPlanner.Controls.PreFlight.CheckListItem.defaultsrc = MainV2.comPort.MAV.cs;
 
             if (Settings.Instance["maplast_lat"] != "")
             {
@@ -708,8 +707,6 @@ namespace MissionPlanner.GCSViews
             TabListDisplay.Clear();
 
             TabListDisplay.Add(tabQuick.Name, MainV2.DisplayConfiguration.displayQuickTab);
-
-            TabListDisplay.Add(tabPagePreFlight.Name, MainV2.DisplayConfiguration.displayPreFlightTab);
 
             TabListDisplay.Add(tabActions.Name, MainV2.DisplayConfiguration.displayAdvActionsTab);
 
@@ -5591,11 +5588,6 @@ namespace MissionPlanner.GCSViews
                             bindingSourceQuickTab.UpdateDataSource(MainV2.comPort.MAV.cs));
                     }
                     else if (tabControlactions.SelectedTab == tabGauges)
-                    {
-                        MainV2.comPort.MAV.cs.UpdateCurrentSettings(
-                            bindingSourceGaugesTab.UpdateDataSource(MainV2.comPort.MAV.cs));
-                    }
-                    else if (tabControlactions.SelectedTab == tabPagePreFlight)
                     {
                         MainV2.comPort.MAV.cs.UpdateCurrentSettings(
                             bindingSourceGaugesTab.UpdateDataSource(MainV2.comPort.MAV.cs));

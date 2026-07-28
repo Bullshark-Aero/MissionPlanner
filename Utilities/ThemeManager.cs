@@ -2,7 +2,6 @@
 using log4net;
 using MissionPlanner.Controls;
 using MissionPlanner.Controls.BackstageView;
-using MissionPlanner.Controls.PreFlight;
 using System;
 using System.Drawing;
 using System.IO;
@@ -536,7 +535,6 @@ xmlns:Wizard=""using:MissionPlanner.Wizard""
 xmlns:ConfigurationView=""using:MissionPlanner.GCSViews.ConfigurationView""
 xmlns:Custom=""using:Custom""
 xmlns:controls=""using:Microsoft.Toolkit.Uwp.UI.Controls""
-xmlns:PreFlight=""using:MissionPlanner.Controls.PreFlight""
 mc:Ignorable=""d""
 > <Grid>";
 
@@ -567,7 +565,7 @@ mc:Ignorable=""d""
             {
                 if (ctl is QuickView || ctl is ServoOptions || ctl is ModifyandSet
                     || ctl is Coords /*|| ctl is AGaugeApp.AGauge*/|| ctl is MissionPlanner.Controls.HUD
-                    || ctl is ImageLabel || ctl is RelayOptions || ctl is CheckListControl
+                    || ctl is ImageLabel || ctl is RelayOptions
                     || ctl is MavlinkCheckBox)
                 {
                     //   st.WriteLine(@"<WindowsFormsHost HorizontalAlignment=""Left"" VerticalAlignment=""Top"" Margin=""" + ctl.Location.X + "," + ctl.Location.Y + @",0,0"" Width=""" + ctl.Width + @""" Height=""" + ctl.Height + @""">");
