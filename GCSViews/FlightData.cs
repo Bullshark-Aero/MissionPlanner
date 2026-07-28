@@ -7,9 +7,7 @@ using log4net;
 using Microsoft.Scripting.Utils;
 using MissionPlanner.ArduPilot;
 using MissionPlanner.BSA.Checks;
-using MissionPlanner.BSA.Config;
 using MissionPlanner.BSA.Core;
-using MissionPlanner.BSA.Reports;
 using MissionPlanner.BSA.UI;
 using MissionPlanner.Controls;
 using MissionPlanner.GeoRef;
@@ -1111,69 +1109,6 @@ namespace MissionPlanner.GCSViews
             using (var wizard = new PreflightWizardForm(engine))
             {
                 wizard.ShowDialog(ParentForm);
-            }
-        }
-
-        private void BUT_BsaExportConfig_Click(object sender, EventArgs e)
-        {
-            string operatorName = "";
-            if (InputBox.Show("Export MP Config", "Operator name:", ref operatorName) != DialogResult.OK ||
-                string.IsNullOrWhiteSpace(operatorName))
-                return;
-
-            string version = "1.0.0";
-            if (InputBox.Show("Export MP Config", "Package version:", ref version) != DialogResult.OK ||
-                string.IsNullOrWhiteSpace(version))
-                return;
-
-            string releaseNotes = "";
-            InputBox.Show("Export MP Config", "Release notes (optional):", ref releaseNotes);
-
-            using (var sfd = new SaveFileDialog
-            {
-                Title = "Export MP Config",
-                Filter = "BSA MP Config (*.bsampconfig)|*.bsampconfig",
-                // Sanitized for the filename only - the manifest keeps the operator's exact string.
-                FileName = $"BSA_MP_Config_v{PreflightReportWriter.SanitizeForFilename(version)}.bsampconfig"
-            })
-            {
-                if (sfd.ShowDialog() != DialogResult.OK)
-                    return;
-
-                try
-                {
-                    BsaConfigComposition.ExportNow(sfd.FileName, operatorName, version, releaseNotes);
-                }
-                catch (Exception ex)
-                {
-                    CustomMessageBox.Show("Could not export MP config: " + ex.Message, Strings.ERROR);
-                    return;
-                }
-
-                if (CustomMessageBox.Show(
-                        $"MP config exported to:\n{sfd.FileName}\n\nSet this as this machine's approved reference config?",
-                        "Export MP Config", CustomMessageBox.MessageBoxButtons.YesNo) == CustomMessageBox.DialogResult.Yes)
-                {
-                    try
-                    {
-                        Directory.CreateDirectory(BsaPaths.RootDirectory);
-                        // The operator may have saved the export directly into the approved slot -
-                        // File.Copy onto itself throws even with overwrite:true.
-                        if (!string.Equals(Path.GetFullPath(sfd.FileName),
-                                Path.GetFullPath(BsaPaths.ApprovedConfigPackagePath),
-                                StringComparison.OrdinalIgnoreCase))
-                            File.Copy(sfd.FileName, BsaPaths.ApprovedConfigPackagePath, true);
-                        // Changing what WP1.6's approved-package check compares against is an auditable
-                        // action - CheckAction records it while the operational lock is armed (fail-open
-                        // no-op otherwise).
-                        MissionPlanner.BSA.Lock.BsaLockService.Instance.CheckAction("mp_setting_change", "set_approved_config");
-                        CustomMessageBox.Show("Approved reference config updated.", "Export MP Config");
-                    }
-                    catch (Exception ex)
-                    {
-                        CustomMessageBox.Show("Could not set as approved config: " + ex.Message, Strings.ERROR);
-                    }
-                }
             }
         }
 

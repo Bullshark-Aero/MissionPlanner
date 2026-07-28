@@ -12,7 +12,7 @@ namespace MissionPlanner.BSA.UI
     /// Import flow per the source document: validate -&gt; show version/date/source -&gt; preview what
     /// will change -&gt; back up current config -&gt; apply selected -&gt; local-setup flags -&gt; restart
     /// prompt. "Restore Previous Config" is the exact same wizard pointed at a backup file instead of
-    /// an arbitrary picked one - see ConfigActionsBar. Step navigation mirrors
+    /// an arbitrary picked one - see ConfigBullsharkPage. Step navigation mirrors
     /// PreflightWizardForm's shape (WP1): one content panel swapped per step, Next button re-labeled
     /// per step.
     /// </summary>
@@ -32,7 +32,7 @@ namespace MissionPlanner.BSA.UI
         string _backupPath;
         Step _step;
 
-        /// <param name="validation">Pre-validated by the caller (ConfigActionsBar) BEFORE this form
+        /// <param name="validation">Pre-validated by the caller (ConfigBullsharkPage) BEFORE this form
         /// is constructed - validation failure must never reach this form at all. Closing a
         /// modally-shown form from inside its own Load event (the previous design) is a documented
         /// WinForms hazard, and validating first is better UX anyway: no window ever opens for a

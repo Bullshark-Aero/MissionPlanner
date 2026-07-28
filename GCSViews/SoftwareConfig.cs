@@ -145,6 +145,12 @@ namespace MissionPlanner.GCSViews
             {
                 BackstageViewPage start = null;
 
+                // BSA: every BullShark configuration action lives on one page (import/restore/compare
+                // an approved config package, export this machine's config, Engineering-Mode lock
+                // policy editing). Added first so it heads the rail, and deliberately not assigned to
+                // `start` - it must not displace the usual default landing page.
+                AddBackstageViewPage(typeof(MissionPlanner.BSA.UI.ConfigBullsharkPage), "BullShark");
+
                 if (gotAllParams)
                 {
                     if (MainV2.comPort.BaseStream.IsOpen)
