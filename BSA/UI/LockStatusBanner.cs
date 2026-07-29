@@ -23,7 +23,8 @@ namespace MissionPlanner.BSA.UI
         {
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
-            Font = new Font(FontFamily.GenericSansSerif, 9, FontStyle.Bold)
+            Font = new Font(FontFamily.GenericSansSerif, 9, FontStyle.Bold),
+            Tag = "custom"
         };
 
         /// <summary>Test visibility only - the real UI surface is the rendered control.</summary>
