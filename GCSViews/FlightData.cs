@@ -6,6 +6,9 @@ using GMap.NET.WindowsForms.Markers;
 using log4net;
 using Microsoft.Scripting.Utils;
 using MissionPlanner.ArduPilot;
+using MissionPlanner.BSA.Checks;
+using MissionPlanner.BSA.Core;
+using MissionPlanner.BSA.UI;
 using MissionPlanner.Controls;
 using MissionPlanner.GeoRef;
 using MissionPlanner.Joystick;
@@ -517,10 +520,9 @@ namespace MissionPlanner.GCSViews
 
             CheckBatteryShow();
 
-            // make sure the hud user items/warnings/checklist are using the current state
+            // make sure the hud user items/warnings are using the current state
             HUD.Custom.src = MainV2.comPort.MAV.cs;
             CustomWarning.defaultsrc = MainV2.comPort.MAV.cs;
-            MissionPlanner.Controls.PreFlight.CheckListItem.defaultsrc = MainV2.comPort.MAV.cs;
 
             if (Settings.Instance["maplast_lat"] != "")
             {
@@ -703,8 +705,6 @@ namespace MissionPlanner.GCSViews
             TabListDisplay.Clear();
 
             TabListDisplay.Add(tabQuick.Name, MainV2.DisplayConfiguration.displayQuickTab);
-
-            TabListDisplay.Add(tabPagePreFlight.Name, MainV2.DisplayConfiguration.displayPreFlightTab);
 
             TabListDisplay.Add(tabActions.Name, MainV2.DisplayConfiguration.displayAdvActionsTab);
 
@@ -1077,6 +1077,38 @@ namespace MissionPlanner.GCSViews
             catch
             {
                 CustomMessageBox.Show(Strings.ErrorNoResponse, Strings.ERROR);
+            }
+        }
+
+        private void BUT_BsaPreflight_Click(object sender, EventArgs e)
+        {
+            var service = BsaPreflightService.Instance;
+            var engine = service.CurrentRun;
+            var alreadyRunning = engine != null &&
+                                  (engine.Run.State == PreflightRunState.InProgress ||
+                                   engine.Run.State == PreflightRunState.AwaitingSignOff);
+
+            if (!alreadyRunning)
+            {
+                string operatorName = "";
+                if (InputBox.Show("BSA Preflight", "Operator name:", ref operatorName) != DialogResult.OK ||
+                    string.IsNullOrWhiteSpace(operatorName))
+                    return;
+
+                try
+                {
+                    engine = BsaPreflightComposition.StartDefaultRun(operatorName);
+                }
+                catch (Exception ex)
+                {
+                    CustomMessageBox.Show("Could not start BSA preflight: " + ex.Message, Strings.ERROR);
+                    return;
+                }
+            }
+
+            using (var wizard = new PreflightWizardForm(engine))
+            {
+                wizard.ShowDialog(ParentForm);
             }
         }
 
@@ -5491,11 +5523,6 @@ namespace MissionPlanner.GCSViews
                             bindingSourceQuickTab.UpdateDataSource(MainV2.comPort.MAV.cs));
                     }
                     else if (tabControlactions.SelectedTab == tabGauges)
-                    {
-                        MainV2.comPort.MAV.cs.UpdateCurrentSettings(
-                            bindingSourceGaugesTab.UpdateDataSource(MainV2.comPort.MAV.cs));
-                    }
-                    else if (tabControlactions.SelectedTab == tabPagePreFlight)
                     {
                         MainV2.comPort.MAV.cs.UpdateCurrentSettings(
                             bindingSourceGaugesTab.UpdateDataSource(MainV2.comPort.MAV.cs));

@@ -1648,6 +1648,16 @@ Mission Planner waits for 2 valid heartbeat packets before connecting
                 return true;
             }
 
+            // BSA Operational Lock (WP3) - see BsaLockGate's doc comment for why this is a static
+            // delegate rather than a direct reference, and why it must never throw or block. A refusal
+            // here must be loud (an exception), not a returned false: several callers write multiple
+            // params in a row without checking the boolean return value (e.g. ConfigHWCompass.cs), and
+            // reusing "false" for "refused by policy" would let those sequences silently continue as if
+            // the write succeeded.
+            var lockRefusal = BsaLockGate.ParamWriteCheck?.Invoke(paramname, value);
+            if (lockRefusal != null)
+                throw new InvalidOperationException(lockRefusal);
+
             giveComport = true;
 
             // param type is set here, however it is always sent over the air as a float 100int = 100f.

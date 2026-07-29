@@ -701,6 +701,15 @@ namespace MissionPlanner
 
             InitializeComponent();
 
+            // BSA Operational Lock (WP3) - wires BsaLockService to BsaPreflightService.StatusChanged
+            // and the setParamAsync gate, and adds the persistent Lock/Preflight status banner. Must
+            // happen early, well before any preflight could possibly complete.
+            MissionPlanner.BSA.Lock.BsaLockComposition.Initialize();
+            var bsaLockStatusBanner = new MissionPlanner.BSA.UI.LockStatusBanner();
+            bsaLockStatusBanner.AttachToServices(MissionPlanner.BSA.Core.BsaPreflightService.Instance,
+                MissionPlanner.BSA.Lock.BsaLockService.Instance);
+            Controls.Add(bsaLockStatusBanner);
+
             //Init Theme table and load BurntKermit as a default
             ThemeManager.thmColor = new ThemeColorTable(); //Init colortable
             ThemeManager.thmColor.InitColors(); //This fills up the table with BurntKermit defaults.
@@ -1119,8 +1128,6 @@ namespace MissionPlanner
             HUD.Custom.src = MainV2.comPort.MAV.cs;
 
             CustomWarning.defaultsrc = MainV2.comPort.MAV.cs;
-
-            MissionPlanner.Controls.PreFlight.CheckListItem.defaultsrc = MainV2.comPort.MAV.cs;
 
             // when uploading a firmware we dont want to reload this screen.
             if (instance.MyView.current.Control != null &&

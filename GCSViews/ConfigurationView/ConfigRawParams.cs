@@ -1,4 +1,5 @@
 using log4net;
+using MissionPlanner.BSA.UI;
 using MissionPlanner.Controls;
 using MissionPlanner.Utilities;
 using System;
@@ -310,6 +311,12 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             }
 
 
+            // BSA Operational Lock (WP3) - this is the gated confirmation surface for parameter
+            // writes: any of these params classed Authorise by the armed policy prompts once for the
+            // Engineering passphrase; the scope then pre-authorises exactly those names at the wire
+            // hook. Null scope (nothing Authorise-classed, lock off, or prompt refused) is harmless -
+            // refused Authorise params are still refused individually at the wire, as before.
+            using (LockGateUi.AuthoriseParamWrites(temp, "Writing parameters to the vehicle"))
             foreach (string value in temp)
             {
                 try
@@ -979,6 +986,13 @@ namespace MissionPlanner.GCSViews.ConfigurationView
 
         private void BUT_reset_params_Click(object sender, EventArgs e)
         {
+            // BSA Operational Lock (WP3) - dedicated gate rather than relying only on the generic
+            // param-write hook: the reset feature writes FORMAT_VERSION/SYSID_SW_MREV as an
+            // implementation detail, but the policy's ParamResetDefaults action id means "block the
+            // reset feature," not "block writing those two specific params."
+            if (!LockGateUi.AllowedToProceed("param_reset_defaults", null, "Resetting parameters to default"))
+                return;
+
             if (
                 CustomMessageBox.Show("Reset all parameters to default\nAre you sure!!", "Reset",
                     MessageBoxButtons.YesNo) == (int)DialogResult.Yes)

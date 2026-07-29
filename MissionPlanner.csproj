@@ -514,12 +514,6 @@
     <Compile Update="Controls\ToolStripConnectionControl.cs">
       <SubType>Component</SubType>
     </Compile>
-    <Compile Update="Controls\PreFlight\CheckListControl.cs">
-      <SubType>UserControl</SubType>
-    </Compile>
-    <Compile Update="Controls\PreFlight\CheckListInput.cs">
-      <SubType>UserControl</SubType>
-    </Compile>
     <Compile Update="GCSViews\FlightData.cs">
       <SubType>UserControl</SubType>
     </Compile>
@@ -738,7 +732,13 @@
     <Content Include="ChangeLog.txt">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
-    <Content Include="checklistDefault.xml">
+    <Content Include="BSA\DefaultConfig\preflight_checks.default.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="BSA\DefaultConfig\bsa_key_policy.default.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="BSA\DefaultConfig\lock_policy.default.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="dataflashlog.xml">

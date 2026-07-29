@@ -350,11 +350,18 @@
    <Compile Remove="Controls\OpenGLtest.cs" />
    <Compile Remove="Controls\OpenGLtest2.cs" />
    <Compile Remove="Utilities\ImageMatch.cs" />
+   <!-- BSA/ is WinForms-only (wizard UI) and not part of this Xamarin/netstandard2.0 build. -->
+   <Compile Remove="BSA\**" />
  </ItemGroup>
 
  <ItemGroup>
    <EmbeddedResource Remove="Controls\OpenGLtest.resx" />
    <EmbeddedResource Remove="Controls\OpenGLtest2.resx" />
+   <EmbeddedResource Remove="BSA\**" />
+ </ItemGroup>
+
+ <ItemGroup>
+   <None Remove="BSA\**" />
  </ItemGroup>
 
 
@@ -619,9 +626,6 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Update="camerasBuiltin.xml">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Update="checklistDefault.xml">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Update="dataflashlog.xml">

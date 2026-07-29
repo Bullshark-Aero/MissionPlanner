@@ -9,6 +9,7 @@ using GMap.NET.WindowsForms.Markers;
 using Ionic.Zip;
 using log4net;
 using MissionPlanner.ArduPilot;
+using MissionPlanner.BSA.UI;
 using MissionPlanner.Controls;
 using MissionPlanner.Grid;
 using MissionPlanner.Maps;
@@ -645,6 +646,13 @@ namespace MissionPlanner.GCSViews
         /// <param name="e"></param>
         public void BUT_write_Click(object sender, EventArgs e)
         {
+            // BSA Operational Lock (WP3) - mission edits are Allow-by-default in the shipped policy
+            // (log-only while locked; the audit entry means "attempted", it fires before the alt-mode
+            // confirm below can cancel). The gate also honors Block/Authorise if ops ever reclassifies
+            // MissionEdit in the policy.
+            if (!LockGateUi.AllowedToProceed("mission_edit", null, "Writing the mission to the vehicle"))
+                return;
+
             if ((altmode) CMB_altmode.SelectedValue == altmode.Absolute)
             {
                 if ((int) DialogResult.No ==
@@ -1894,6 +1902,10 @@ namespace MissionPlanner.GCSViews
 
         public void but_writewpfast_Click(object sender, EventArgs e)
         {
+            // BSA Operational Lock (WP3) - see BUT_write_Click's comment.
+            if (!LockGateUi.AllowedToProceed("mission_edit", null, "Writing the mission to the vehicle"))
+                return;
+
             if ((altmode) CMB_altmode.SelectedValue == altmode.Absolute)
             {
                 if ((int) DialogResult.No ==

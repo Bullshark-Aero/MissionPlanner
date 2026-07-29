@@ -1,0 +1,74 @@
+{
+  "SchemaVersion": 1,
+  "Rules": [
+    {
+      "Match": "*apikey*|*api_key*|*password*|*psk*|*token*|*signing*|*secret*|*credential*",
+      "Class": "Secret"
+    },
+    {
+      "Match": "windowlocation*|lastsize*|mainheight|mainwidth|mainlocx|mainlocy|mainmaximised|flightsplitter|maplast_lat|maplast_lng|maplast_zoom",
+      "Class": "Volatile"
+    },
+    {
+      "Match": "comport*|baudrate*|*_baud|udp_port|*directory|video_device|joystick_name|guid|gcsid|kindex*|autoconnect|gstlaunchexe|gstreamer_url|mjpeg_url",
+      "Class": "MachineSpecific"
+    },
+    {
+      "Match": "speech*",
+      "Class": "Portable"
+    },
+    {
+      "Match": "distunits",
+      "Class": "Portable"
+    },
+    {
+      "Match": "speedunits",
+      "Class": "Portable"
+    },
+    {
+      "Match": "altunits",
+      "Class": "Portable"
+    },
+    {
+      "Match": "hud*",
+      "Class": "Portable"
+    },
+    {
+      "Match": "guided_alt*",
+      "Class": "Portable"
+    },
+    {
+      "Match": "quickview*",
+      "Class": "Portable"
+    },
+    {
+      "Match": "gmapmarkerbase_*",
+      "Class": "Portable"
+    },
+    {
+      "Match": "language|advancedview|displayview|theme|terminaltheming|menu_autohide",
+      "Class": "Portable"
+    },
+    {
+      "Match": "maptype|mapboxurl",
+      "Class": "Portable"
+    },
+    {
+      "Match": "txt_*|cmb_altmode|fpaltmode|fpcoordmouse|fpminaltwarning|takeoff_alt",
+      "Class": "Portable"
+    },
+    {
+      "Match": "enableadsb|showairports|showtfr",
+      "Class": "Portable"
+    },
+    {
+      "Match": "analyticsoptout|beta_updates",
+      "Class": "Portable"
+    },
+    {
+      "Match": "joy_elevons",
+      "Class": "Portable"
+    }
+  ],
+  "Default": "MachineSpecific"
+}
