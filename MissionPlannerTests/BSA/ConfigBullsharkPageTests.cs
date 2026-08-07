@@ -9,7 +9,7 @@ namespace MissionPlanner.BSA.Tests
 {
     /// <summary>
     /// The page is the single entry point for every BSA config action, so the thing worth guarding is
-    /// that constructing it stays free of MP globals (no MainV2.comPort / Settings) and that all five
+    /// that constructing it stays free of MP globals (no MainV2.comPort / Settings) and that all six
     /// actions are actually wired up. The click handlers themselves need a live MP process and stay
     /// uncovered, exactly as they were before the move.
     /// </summary>
@@ -35,7 +35,7 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
-        public void Page_ExposesAllFiveConfigActions()
+        public void Page_ExposesAllSixConfigActions()
         {
             using (var page = new ConfigBullsharkPage())
             {
@@ -48,6 +48,7 @@ namespace MissionPlanner.BSA.Tests
                         "Restore Previous...",
                         "Compare to Package...",
                         "Export MP Config",
+                        "Change Passphrase...",
                         "Edit Lock Policy..."
                     },
                     buttonTexts);

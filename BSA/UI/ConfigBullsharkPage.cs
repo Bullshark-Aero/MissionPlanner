@@ -31,6 +31,7 @@ namespace MissionPlanner.BSA.UI
         readonly Button _restoreButton = new Button { Text = "Restore Previous..." };
         readonly Button _compareButton = new Button { Text = "Compare to Package..." };
         readonly Button _exportButton = new Button { Text = "Export MP Config" };
+        readonly Button _changePassphraseButton = new Button { Text = "Change Passphrase..." };
         readonly Button _editPolicyButton = new Button { Text = "Edit Lock Policy..." };
 
         public ConfigBullsharkPage()
@@ -39,6 +40,7 @@ namespace MissionPlanner.BSA.UI
             _restoreButton.Click += (s, e) => OnRestoreClicked();
             _compareButton.Click += (s, e) => OnCompareClicked();
             _exportButton.Click += (s, e) => OnExportClicked();
+            _changePassphraseButton.Click += (s, e) => OnChangePassphraseClicked();
             _editPolicyButton.Click += (s, e) => OnEditPolicyClicked();
 
             var approved = BuildSection("Approved Configuration",
@@ -52,6 +54,8 @@ namespace MissionPlanner.BSA.UI
             var authoring = BuildSection("Authoring & Engineering",
                 Row(_exportButton,
                     "Publish this machine's settings as a .bsampconfig package, and optionally set it as this machine's approved reference config."),
+                Row(_changePassphraseButton,
+                    "Set or change the Engineering passphrase used to edit the lock policy and resolve authorise class prompts."),
                 Row(_editPolicyButton,
                     "Engineering Mode only. Edit and re-approve the operational lock policy (lock_policy.json)."));
 
@@ -286,6 +290,94 @@ namespace MissionPlanner.BSA.UI
                         CustomMessageBox.Show("Could not set as approved config: " + ex.Message, Strings.ERROR);
                     }
                 }
+            }
+        }
+
+        // ----- Engineering passphrase -----
+
+        /// <summary>
+        /// Set (first use) or change the Engineering Mode passphrase. Gated by the same
+        /// lock_policy_edit rule as OnEditPolicyClicked below, not a separate action id: changing this
+        /// passphrase also invalidates lock_policy.json's keyed approval stamp (LockPolicyIntegrity
+        /// HMACs it with EngineeringMode.DerivedIntegrityKey), so it carries the same risk as editing
+        /// the policy's content and should be refused under the same circumstances.
+        /// </summary>
+        void OnChangePassphraseClicked()
+        {
+            var lockDecision = BsaLockService.Instance.CheckAction("lock_policy_edit", "engineering_passphrase_change");
+            if (lockDecision.Class == LockClass.Block)
+            {
+                CustomMessageBox.Show(
+                    "The Engineering passphrase cannot be changed while the BSA Operational Lock is armed.",
+                    "BSA Operational Lock");
+                return;
+            }
+
+            var wasConfigured = EngineeringMode.IsConfigured;
+            if (wasConfigured)
+            {
+                string currentPassphrase = "";
+                if (InputBox.Show("Engineering Mode", "Enter the CURRENT Engineering passphrase:", ref currentPassphrase, true) != DialogResult.OK)
+                    return;
+
+                if (!EngineeringMode.Verify(currentPassphrase))
+                {
+                    CustomMessageBox.Show("Incorrect Engineering passphrase.", "Engineering Mode");
+                    AuditPassphraseChange("Rejected");
+                    return;
+                }
+            }
+
+            string newPassphrase = "";
+            if (InputBox.Show("Engineering Mode", "Enter the NEW Engineering passphrase:", ref newPassphrase, true) != DialogResult.OK)
+                return;
+
+            if (string.IsNullOrWhiteSpace(newPassphrase))
+            {
+                CustomMessageBox.Show("The Engineering passphrase cannot be blank.", "Engineering Mode");
+                return;
+            }
+
+            string confirmPassphrase = "";
+            if (InputBox.Show("Engineering Mode", "Confirm the NEW Engineering passphrase:", ref confirmPassphrase, true) != DialogResult.OK)
+                return;
+
+            if (confirmPassphrase != newPassphrase)
+            {
+                CustomMessageBox.Show("The passphrases you entered do not match. The Engineering passphrase was not changed.", "Engineering Mode");
+                return;
+            }
+
+            EngineeringMode.SetPassphrase(newPassphrase);
+
+            // The lock policy's approval stamp is keyed to the passphrase just replaced - re-stamp it
+            // under the new one now, or the next arm attempt will see it as tampered and refuse to arm.
+            LockPolicyIntegrity.Stamp(BsaLockComposition.ResolveLockPolicyPath());
+
+            AuditPassphraseChange(wasConfigured ? "Changed" : "Configured");
+
+            // Defensive, same as OnEditPolicyClicked below: the Block check above already prevents
+            // this while armed, so this is currently unreachable rather than a live invalidation path.
+            BsaLockService.Instance.Invalidate("Engineering passphrase changed and lock policy re-approved.");
+
+            CustomMessageBox.Show("Engineering passphrase updated.", "Engineering Mode");
+        }
+
+        static void AuditPassphraseChange(string outcome)
+        {
+            try
+            {
+                BsaAuditLog.Append(BsaPaths.AuditDirectory, new AuditEntry
+                {
+                    TimestampUtc = DateTime.UtcNow,
+                    ActionId = "engineering_passphrase_change",
+                    MatchValue = null,
+                    Class = "Engineering",
+                    Outcome = outcome
+                });
+            }
+            catch
+            {
             }
         }
 
