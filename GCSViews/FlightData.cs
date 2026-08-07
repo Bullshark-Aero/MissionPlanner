@@ -2500,21 +2500,32 @@ namespace MissionPlanner.GCSViews
             {
                 QuickView qv = (QuickView) checkbox.Tag;
 
-                // prompt for custom label while "Display This" form is still open,
-                // so Cancel returns the user to field selection
+                // only one field can be bound to this QuickView - uncheck any other checkbox
+                // in the same selection form so the popup doesn't show two selections at once
+                if (checkbox.Parent != null)
+                {
+                    foreach (Control ctl in checkbox.Parent.Controls)
+                    {
+                        if (ctl is CheckBox otherBox && otherBox != checkbox && otherBox.Checked)
+                        {
+                            otherBox.Checked = false;
+                            otherBox.BackColor = Color.Transparent;
+                        }
+                    }
+                }
+
+                // prompt for custom label while "Display This" form is still open;
+                // Cancel (or an empty label) falls back to the default label and still selects the field
                 string defaultDesc = MainV2.comPort.MAV.cs.GetNameandUnit(checkbox.Name);
                 string savedLabel = Settings.Instance[qv.Name + "_label"];
                 string customDesc = !string.IsNullOrEmpty(savedLabel) ? savedLabel : defaultDesc;
-                if (InputBox.Show("Custom Label", "Enter a custom label (press Cancel to use default):", ref customDesc) != DialogResult.OK)
+                if (InputBox.Show("Custom Label", "Enter a custom label (press Cancel to use default):", ref customDesc) != DialogResult.OK
+                    || string.IsNullOrWhiteSpace(customDesc))
                 {
-                    // user cancelled — uncheck and leave the selection form open
-                    checkbox.BackColor = Color.Transparent;
-                    checkbox.Checked = false;
-                    return;
+                    customDesc = defaultDesc;
                 }
 
-                if (string.IsNullOrWhiteSpace(customDesc))
-                    customDesc = defaultDesc;
+                checkbox.BackColor = Color.Green;
 
                 // apply field, label, and data binding
                 Settings.Instance[qv.Name] = checkbox.Name;
