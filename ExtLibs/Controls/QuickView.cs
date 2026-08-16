@@ -40,6 +40,25 @@ namespace MissionPlanner.Controls
         string _numberformat = "0.00";
         private string _desc = "";
         private Color _numbercolor;
+        private bool _nodata;
+
+        /// <summary>
+        /// Set while nothing is bound to this view - e.g. a named_value_float field the vehicle has not
+        /// sent yet. Painting the number would show 0.00, which an operator reads as a genuine zero
+        /// rather than as "no data", so dashes are drawn instead.
+        /// </summary>
+        [System.ComponentModel.Browsable(true)]
+        public bool nodata
+        {
+            get { return _nodata; }
+            set { if (_nodata == value) return; _nodata = value; Invalidate(); }
+        }
+
+        const string nodatatext = "---";
+
+        // muted enough to read as inactive against this app's dark quick view, still legible if a
+        // light theme is in use
+        static readonly Color nodatacolor = Color.FromArgb(125, 125, 125);
 
         [System.ComponentModel.Browsable(true)]
         public string numberformat
@@ -86,7 +105,7 @@ namespace MissionPlanner.Controls
             }
             //
             {
-                var numb = number.ToString(numberformat);
+                var numb = _nodata ? nodatatext : number.ToString(numberformat);
 
                 Size extent = e.MeasureString("0".PadLeft(numb.Length+1,'0'), new Font(this.Font.FontFamily, (float)newSize, this.Font.Style)).ToSize();
 
@@ -103,7 +122,7 @@ namespace MissionPlanner.Controls
 
                 extent = e.MeasureString(numb, new Font(this.Font.FontFamily, (float)newSize, this.Font.Style)).ToSize();
 
-                e.DrawString(numb, new Font(this.Font.FontFamily, (float)newSize, this.Font.Style), new SolidBrush(this.numberColor), this.Width / 2 - extent.Width / 2, y + ((this.Height - y) / 2 - extent.Height / 2));
+                e.DrawString(numb, new Font(this.Font.FontFamily, (float)newSize, this.Font.Style), new SolidBrush(_nodata ? nodatacolor : this.numberColor), this.Width / 2 - extent.Width / 2, y + ((this.Height - y) / 2 - extent.Height / 2));
             }
         }
 

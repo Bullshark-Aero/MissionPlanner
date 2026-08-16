@@ -467,29 +467,33 @@ namespace MissionPlanner.GCSViews
                     {
                         QuickView QV = (QuickView) ctls[0];
 
+                        // the setting holds either a CurrentState property name, or the MAV_ name of a
+                        // named_value_float field - the latter needs mapping to the customfield slot it
+                        // landed in this session, and that slot may not have been handed out yet
+                        string saved = Settings.Instance["quickView" + f];
+                        string field = resolveQuickViewField(saved);
+
                         // set description and unit
-                        string desc = Settings.Instance["quickView" + f];
-                        if (QV.Tag == null)
-                            QV.Tag = desc;
                         string savedLabel = Settings.Instance["quickView" + f + "_label"];
                         QV.desc = !string.IsNullOrEmpty(savedLabel)
                             ? savedLabel
-                            : MainV2.comPort.MAV.cs.GetNameandUnit(desc);
+                            : MainV2.comPort.MAV.cs.GetNameandUnit(field ?? saved);
 
                         // set databinding for value
-                        QV.DataBindings.Clear();
-                        try
+                        if (field == null)
                         {
-                            var b = new Binding("number", bindingSourceQuickTab,
-                                Settings.Instance["quickView" + f], true);
-                            b.Format += new ConvertEventHandler(BindingTypeToNumber);
-                            b.Parse += new ConvertEventHandler(NumberToBindingType);
-
-                            QV.DataBindings.Add(b);
+                            // named value not seen yet - bind it when it turns up, and show dashes
+                            // until then: a stale 0.00 under a live-looking label reads as a real
+                            // reading rather than as no data
+                            quickViewPendingFields[QV.Name] = saved;
+                            QV.DataBindings.Clear();
+                            QV.nodata = true;
                         }
-                        catch (Exception ex)
+                        else
                         {
-                            log.Debug(ex);
+                            quickViewPendingFields.Remove(QV.Name);
+                            QV.Tag = field;
+                            applyQuickViewBinding(QV, field);
                         }
                     }
                 }
@@ -2528,16 +2532,105 @@ namespace MissionPlanner.GCSViews
                 checkbox.BackColor = Color.Green;
 
                 // apply field, label, and data binding
-                Settings.Instance[qv.Name] = checkbox.Name;
+                Settings.Instance[qv.Name] = quickViewSettingValue(checkbox.Name);
+                quickViewPendingFields.Remove(qv.Name);
                 qv.Tag = checkbox.Name;
                 qv.desc = customDesc;
                 Settings.Instance[qv.Name + "_label"] = customDesc;
 
-                qv.DataBindings.Clear();
-                var b = new Binding("number", bindingSourceQuickTab, checkbox.Name, true);
+                applyQuickViewBinding(qv, checkbox.Name);
+            }
+        }
+
+        // quick views naming a MAV_ (named_value_float) field we have not received yet;
+        // control name -> saved MAV_ name. retried on the ui update tick until the slot appears.
+        readonly Dictionary<string, string> quickViewPendingFields = new Dictionary<string, string>();
+
+        /// <summary>
+        /// What to persist for a quick view field. named_value_float fields are saved under their
+        /// MAV_ name: the customfield slot backing them is handed out in arrival order and is not
+        /// stable across restarts, so the slot must never be the thing we store.
+        /// </summary>
+        static string quickViewSettingValue(string fieldName)
+        {
+            if (fieldName != null && fieldName.StartsWith("customfield"))
+            {
+                string mavname;
+                if (CurrentState.custom_field_names.TryGetValue(fieldName, out mavname) &&
+                    mavname != null && mavname.StartsWith("MAV_"))
+                    return mavname;
+            }
+
+            return fieldName;
+        }
+
+        /// <summary>
+        /// Maps a saved quick view entry to the CurrentState property to bind to. Returns null when it
+        /// names a MAV_ field that has not been given a customfield slot yet this session.
+        /// </summary>
+        static string resolveQuickViewField(string saved)
+        {
+            if (saved == null || !saved.StartsWith("MAV_"))
+                return saved;
+
+            try
+            {
+                foreach (var item in CurrentState.custom_field_names)
+                {
+                    if (item.Value == saved)
+                        return item.Key;
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                // added to on the link thread - retry on the next pass
+            }
+
+            return null;
+        }
+
+        private void applyQuickViewBinding(QuickView QV, string fieldName)
+        {
+            QV.DataBindings.Clear();
+            try
+            {
+                var b = new Binding("number", bindingSourceQuickTab, fieldName, true);
                 b.Format += new ConvertEventHandler(BindingTypeToNumber);
                 b.Parse += new ConvertEventHandler(NumberToBindingType);
-                qv.DataBindings.Add(b);
+
+                QV.DataBindings.Add(b);
+                QV.nodata = false;
+            }
+            catch (Exception ex)
+            {
+                // nothing is driving the number now, so do not leave the last value on display
+                QV.nodata = true;
+                log.Debug(ex);
+            }
+        }
+
+        /// <summary>
+        /// Binds any quick view whose MAV_ field has turned up since it was loaded. UI thread only.
+        /// </summary>
+        private void resolveQuickViewPendingFields()
+        {
+            foreach (var pending in quickViewPendingFields.ToArray())
+            {
+                var field = resolveQuickViewField(pending.Value);
+                if (field == null)
+                    continue;
+
+                quickViewPendingFields.Remove(pending.Key);
+
+                // search the tab page, not the form - the quick tab may be undocked into its own window
+                Control[] ctls = tabQuick.Controls.Find(pending.Key, true);
+                if (ctls.Length == 0 || !(ctls[0] is QuickView QV))
+                    continue;
+
+                QV.Tag = field;
+                if (string.IsNullOrEmpty(Settings.Instance[pending.Key + "_label"]))
+                    QV.desc = MainV2.comPort.MAV.cs.GetNameandUnit(field);
+                applyQuickViewBinding(QV, field);
             }
         }
 
@@ -5513,6 +5606,10 @@ namespace MissionPlanner.GCSViews
         {
             try
             {
+                // a quick view bound to a MAV_ field can only be wired once the vehicle has sent it
+                if (quickViewPendingFields.Count > 0)
+                    resolveQuickViewPendingFields();
+
                 if (this.Visible && !this.IsDisposed)
                 {
                     //Console.Write("bindingSource1 ");

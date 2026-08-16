@@ -4800,6 +4800,13 @@ namespace MissionPlanner
             {
                 QuickView qv = (QuickView) q;
 
+                // a quick view is not always bound - a panel waiting on a named_value_float that
+                // has not arrived, or one that was never assigned a field, has no bindings at all.
+                // indexing [0] there throws, and this loop runs inside the warning engine's catch-all,
+                // which would silently stop every warning after this one from being evaluated.
+                if (qv.DataBindings.Count == 0)
+                    continue;
+
                 //Get the data field name bind to the control
                 var fieldname = qv.DataBindings[0].BindingMemberInfo.BindingField;
 
