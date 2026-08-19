@@ -41,6 +41,11 @@ namespace MissionPlanner.GCSViews
             this.setViewCountToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.undockToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.renameQuickViewLabelToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.blankQuickViewToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.quickViewColoursToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.quickViewLabelColourToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.quickViewValueColourToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.resetQuickViewColoursToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.bindingSourceQuickTab = new System.Windows.Forms.BindingSource(this.components);
             this.quickView5 = new MissionPlanner.Controls.QuickView();
             this.quickView4 = new MissionPlanner.Controls.QuickView();
@@ -647,9 +652,12 @@ namespace MissionPlanner.GCSViews
             this.contextMenuStripQuickView.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.setViewCountToolStripMenuItem,
             this.undockToolStripMenuItem,
-            this.renameQuickViewLabelToolStripMenuItem});
+            this.renameQuickViewLabelToolStripMenuItem,
+            this.blankQuickViewToolStripMenuItem,
+            this.quickViewColoursToolStripMenuItem});
             this.contextMenuStripQuickView.Name = "contextMenuStripQuickView";
             resources.ApplyResources(this.contextMenuStripQuickView, "contextMenuStripQuickView");
+            this.contextMenuStripQuickView.Opening += new System.ComponentModel.CancelEventHandler(this.contextMenuStripQuickView_Opening);
             // 
             // setViewCountToolStripMenuItem
             // 
@@ -668,6 +676,40 @@ namespace MissionPlanner.GCSViews
             this.renameQuickViewLabelToolStripMenuItem.Name = "renameQuickViewLabelToolStripMenuItem";
             this.renameQuickViewLabelToolStripMenuItem.Text = "Rename Label";
             this.renameQuickViewLabelToolStripMenuItem.Click += new System.EventHandler(this.renameQuickViewLabelToolStripMenuItem_Click);
+            //
+            // blankQuickViewToolStripMenuItem
+            //
+            this.blankQuickViewToolStripMenuItem.Name = "blankQuickViewToolStripMenuItem";
+            this.blankQuickViewToolStripMenuItem.Text = "Hide Value && Label";
+            this.blankQuickViewToolStripMenuItem.CheckOnClick = false;
+            this.blankQuickViewToolStripMenuItem.Click += new System.EventHandler(this.blankQuickViewToolStripMenuItem_Click);
+            //
+            // quickViewColoursToolStripMenuItem
+            //
+            this.quickViewColoursToolStripMenuItem.Name = "quickViewColoursToolStripMenuItem";
+            this.quickViewColoursToolStripMenuItem.Text = "Set Colours";
+            this.quickViewColoursToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.quickViewLabelColourToolStripMenuItem,
+            this.quickViewValueColourToolStripMenuItem,
+            this.resetQuickViewColoursToolStripMenuItem});
+            //
+            // quickViewLabelColourToolStripMenuItem
+            //
+            this.quickViewLabelColourToolStripMenuItem.Name = "quickViewLabelColourToolStripMenuItem";
+            this.quickViewLabelColourToolStripMenuItem.Text = "Label Colour...";
+            this.quickViewLabelColourToolStripMenuItem.Click += new System.EventHandler(this.quickViewLabelColourToolStripMenuItem_Click);
+            //
+            // quickViewValueColourToolStripMenuItem
+            //
+            this.quickViewValueColourToolStripMenuItem.Name = "quickViewValueColourToolStripMenuItem";
+            this.quickViewValueColourToolStripMenuItem.Text = "Value Colour...";
+            this.quickViewValueColourToolStripMenuItem.Click += new System.EventHandler(this.quickViewValueColourToolStripMenuItem_Click);
+            //
+            // resetQuickViewColoursToolStripMenuItem
+            //
+            this.resetQuickViewColoursToolStripMenuItem.Name = "resetQuickViewColoursToolStripMenuItem";
+            this.resetQuickViewColoursToolStripMenuItem.Text = "Reset to Theme Colours";
+            this.resetQuickViewColoursToolStripMenuItem.Click += new System.EventHandler(this.resetQuickViewColoursToolStripMenuItem_Click);
             // 
             // bindingSourceQuickTab
             // 
@@ -3169,6 +3211,11 @@ namespace MissionPlanner.GCSViews
         private System.Windows.Forms.ToolStripMenuItem setBatteryCellCountToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem undockToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem renameQuickViewLabelToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem blankQuickViewToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem quickViewColoursToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem quickViewLabelColourToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem quickViewValueColourToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem resetQuickViewColoursToolStripMenuItem;
         private System.Windows.Forms.Button ALT_btn;
         private System.Windows.Forms.Button STBY_btn;
         private System.Windows.Forms.Button ON_btn;

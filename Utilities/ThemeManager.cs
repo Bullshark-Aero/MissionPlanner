@@ -1078,6 +1078,9 @@ mc:Ignorable=""d""
                     Color mix = Color.FromArgb(ThemeManager.BGColor.ToArgb() ^ 0xffffff);
 
                     Controls.QuickView but = (QuickView)ctl;
+                    // an operator-chosen colour outranks the theme's per-name default
+                    if (but.colourLocked)
+                        continue;
                     if (but.Name == "quickView6")
                     {
                         but.numberColor = Color.FromArgb((0 + mix.R) / 2, (255 + mix.G) / 2, (252 + mix.B) / 2);

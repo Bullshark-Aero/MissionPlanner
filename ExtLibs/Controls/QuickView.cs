@@ -82,6 +82,13 @@ namespace MissionPlanner.Controls
         //We use this property as a backup store for the numberColor, so it is possible to change numberColor temporary.
         public Color numberColorBackup { get; set; }
 
+        //ThemeManager assigns numberColor by control name and runs after Activate(), so it needs telling
+        //to leave a view alone once the operator has pinned its colours.
+        public bool colourLocked { get; set; }
+
+        //Same as numberColorBackup, for the description colour.
+        public Color foreColorBackup { get; set; }
+
         public QuickView()
         {
             InitializeComponent();

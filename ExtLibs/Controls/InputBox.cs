@@ -34,7 +34,7 @@ namespace MissionPlanner.Controls
             return dialog;
         }
         //from http://www.csharp-examples.net/inputbox/
-        public static DialogResult Show(string title, string promptText, ref string value, bool password = false, bool multiline = false)
+        public static DialogResult Show(string title, string promptText, ref string value, bool password = false, bool multiline = false, string resetToValue = null)
         {
             DialogResult answer = DialogResult.Cancel;
 
@@ -46,12 +46,12 @@ namespace MissionPlanner.Controls
             {
                 Application.OpenForms[0].Invoke((MethodInvoker)delegate
                 {
-                    answer = ShowUI(title, promptText, passin, password, multiline);
+                    answer = ShowUI(title, promptText, passin, password, multiline, resetToValue);
                 });
             }
             else
             {
-                answer = ShowUI(title, promptText, passin, password, multiline);
+                answer = ShowUI(title, promptText, passin, password, multiline, resetToValue);
             }
 
             value = InputBox.value;
@@ -59,7 +59,7 @@ namespace MissionPlanner.Controls
             return answer;
         }
 
-        static DialogResult ShowUI(string title, string promptText, string value, bool password = false, bool multiline = false)
+        static DialogResult ShowUI(string title, string promptText, string value, bool password = false, bool multiline = false, string resetToValue = null)
         {
             Form form = new Form();
             Label label = new Label();
@@ -137,6 +137,18 @@ namespace MissionPlanner.Controls
             buttonCancel.DialogResult = DialogResult.Cancel;
             
             //
+            // buttonReset - no DialogResult, so it edits the textbox without closing the dialog
+            //
+            MyButton buttonReset = null;
+            if (resetToValue != null)
+            {
+                buttonReset = new MyButton();
+                buttonReset.Size = new Size(110, 23);
+                buttonReset.Text = "Reset to Default";
+                buttonReset.Click += (s, e) => { textBox.Text = resetToValue; textBox.Focus(); textBox.SelectAll(); };
+            }
+
+            //
             // form
             //
             form.TopMost = true;
@@ -144,6 +156,8 @@ namespace MissionPlanner.Controls
             form.Text = title;
             form.ClientSize = new Size(396, 107);
             form.Controls.AddRange(new Control[] { label, textBox, buttonOk, buttonCancel });
+            if (buttonReset != null)
+                form.Controls.Add(buttonReset);
             form.FormBorderStyle = FormBorderStyle.FixedSingle;
             form.StartPosition = FormStartPosition.CenterScreen;
             form.MinimizeBox = false;
@@ -161,6 +175,8 @@ namespace MissionPlanner.Controls
             y = y + textBox.Height + yMargin;
             buttonOk.Location = new Point(228, y);
             buttonCancel.Location = new Point(309, y);
+            if (buttonReset != null)
+                buttonReset.Location = new Point(textBox.Left, y);
             // Increase the size of the form.
             form.ClientSize = new Size(396, y + buttonOk.Height + yMargin);
 

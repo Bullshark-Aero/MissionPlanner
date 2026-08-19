@@ -4817,7 +4817,7 @@ namespace MissionPlanner
                     {
                         qv.BackColor = ThemeManager.BGColor;
                         qv.numberColor = qv.numberColorBackup; //Restore original color from backup :)
-                        qv.ForeColor = ThemeManager.TextColor;
+                        qv.ForeColor = qv.foreColorBackup.IsEmpty ? ThemeManager.TextColor : qv.foreColorBackup; //Restore label color, if one was chosen
 
 
                     }

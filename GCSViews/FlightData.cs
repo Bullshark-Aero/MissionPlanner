@@ -495,6 +495,8 @@ namespace MissionPlanner.GCSViews
                             QV.Tag = field;
                             applyQuickViewBinding(QV, field);
                         }
+
+                        applyQuickViewAppearance(QV);
                     }
                 }
                 else
@@ -2518,15 +2520,18 @@ namespace MissionPlanner.GCSViews
                     }
                 }
 
-                // prompt for custom label while "Display This" form is still open;
-                // Cancel (or an empty label) falls back to the default label and still selects the field
+                // suggestion and Cancel fallback come from what this operator last called THIS field, not
+                // from what the view last displayed - that label belongs to the field being replaced
                 string defaultDesc = MainV2.comPort.MAV.cs.GetNameandUnit(checkbox.Name);
-                string savedLabel = Settings.Instance[qv.Name + "_label"];
-                string customDesc = !string.IsNullOrEmpty(savedLabel) ? savedLabel : defaultDesc;
-                if (InputBox.Show("Custom Label", "Enter a custom label (press Cancel to use default):", ref customDesc) != DialogResult.OK
+                string remembered = rememberedQuickViewLabel(checkbox.Name);
+                string customDesc = remembered ?? defaultDesc;
+
+                if (InputBox.Show("Custom Label",
+                        "Enter a custom label (Cancel keeps the last label used for this field):",
+                        ref customDesc, false, false, defaultDesc) != DialogResult.OK
                     || string.IsNullOrWhiteSpace(customDesc))
                 {
-                    customDesc = defaultDesc;
+                    customDesc = remembered ?? defaultDesc;
                 }
 
                 checkbox.BackColor = Color.Green;
@@ -2537,14 +2542,44 @@ namespace MissionPlanner.GCSViews
                 qv.Tag = checkbox.Name;
                 qv.desc = customDesc;
                 Settings.Instance[qv.Name + "_label"] = customDesc;
+                rememberQuickViewLabel(checkbox.Name, customDesc);
 
                 applyQuickViewBinding(qv, checkbox.Name);
+
+                // choosing a field un-hides a blanked view, or the selection would appear to do nothing
+                Settings.Instance[qv.Name + "_blank"] = false.ToString();
+                applyQuickViewAppearance(qv);
             }
         }
 
         // quick views naming a MAV_ (named_value_float) field we have not received yet;
         // control name -> saved MAV_ name. retried on the ui update tick until the slot appears.
         readonly Dictionary<string, string> quickViewPendingFields = new Dictionary<string, string>();
+
+        // Keyed to the FIELD, never the view: keyed to the view a label would be restored over whatever
+        // field is chosen next. Normalised like the view's own setting so it survives a slot reshuffle.
+        static string quickViewLabelMemoryKey(string fieldName)
+        {
+            return "quickViewLabel_" + quickViewSettingValue(fieldName);
+        }
+
+        // Label this operator last gave this field, or null if they never named it.
+        static string rememberedQuickViewLabel(string fieldName)
+        {
+            if (string.IsNullOrWhiteSpace(fieldName))
+                return null;
+
+            var remembered = Settings.Instance[quickViewLabelMemoryKey(fieldName)];
+            return string.IsNullOrWhiteSpace(remembered) ? null : remembered;
+        }
+
+        static void rememberQuickViewLabel(string fieldName, string label)
+        {
+            if (string.IsNullOrWhiteSpace(fieldName) || string.IsNullOrWhiteSpace(label))
+                return;
+
+            Settings.Instance[quickViewLabelMemoryKey(fieldName)] = label;
+        }
 
         /// <summary>
         /// What to persist for a quick view field. named_value_float fields are saved under their
@@ -2631,6 +2666,7 @@ namespace MissionPlanner.GCSViews
                 if (string.IsNullOrEmpty(Settings.Instance[pending.Key + "_label"]))
                     QV.desc = MainV2.comPort.MAV.cs.GetNameandUnit(field);
                 applyQuickViewBinding(QV, field);
+                applyQuickViewAppearance(QV);
             }
         }
 
@@ -2643,12 +2679,186 @@ namespace MissionPlanner.GCSViews
                 return;
 
             string currentDesc = qv.desc;
-            if (InputBox.Show("Rename Label", "Enter a new label for this QuickView:", ref currentDesc) == DialogResult.OK
+            // with no field bound there is nothing to reset to, so offer the current text instead of blank
+            string field = qv.Tag == null ? null : qv.Tag.ToString();
+            string defaultDesc = field == null ? qv.desc : MainV2.comPort.MAV.cs.GetNameandUnit(field);
+
+            if (InputBox.Show("Rename Label", "Enter a new label for this QuickView:", ref currentDesc,
+                    false, false, defaultDesc) == DialogResult.OK
                 && !string.IsNullOrWhiteSpace(currentDesc))
             {
                 qv.desc = currentDesc;
                 Settings.Instance[qv.Name + "_label"] = currentDesc;
+                rememberQuickViewLabel(field, currentDesc);
             }
+        }
+
+        // Captured while the menu opens: ContextMenuStrip.SourceControl reads null inside a submenu.
+        QuickView quickViewMenuTarget;
+
+        const string quickViewBlankText = "---";
+
+        static Color? readQuickViewColor(string key)
+        {
+            var raw = Settings.Instance[key];
+            if (string.IsNullOrEmpty(raw))
+                return null;
+
+            int argb;
+            if (int.TryParse(raw, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out argb))
+                return Color.FromArgb(argb);
+
+            return null;
+        }
+
+        static void writeQuickViewColor(string key, Color? colour)
+        {
+            if (colour == null)
+                Settings.Instance.Remove(key);
+            else
+                Settings.Instance[key] = colour.Value.ToArgb().ToString("X8", CultureInfo.InvariantCulture);
+        }
+
+        // Re-applies saved colours and the hidden state on top of whatever binding or theming just ran -
+        // binding clears nodata and the theme reassigns numberColor, so this has to be the last word.
+        private void applyQuickViewAppearance(QuickView qv)
+        {
+            var labelcolour = readQuickViewColor(qv.Name + "_labelcolor");
+            if (labelcolour != null)
+                qv.ForeColor = labelcolour.Value;
+
+            // the warning engine restores these when a colouring warning clears
+            qv.foreColorBackup = qv.ForeColor;
+
+            var valuecolour = readQuickViewColor(qv.Name + "_valuecolor");
+            // the lock stops the theme reassigning numberColor over the operator's choice
+            qv.colourLocked = valuecolour != null;
+            if (valuecolour != null)
+            {
+                qv.numberColor = valuecolour.Value;
+                qv.numberColorBackup = valuecolour.Value;
+            }
+
+            if (Settings.Instance.GetBoolean(qv.Name + "_blank"))
+            {
+                qv.desc = quickViewBlankText;
+                qv.nodata = true;
+            }
+        }
+
+        private void applyQuickViewAppearanceAll()
+        {
+            foreach (Control ctl in tableLayoutPanelQuick.Controls)
+            {
+                if (ctl is QuickView qv)
+                    applyQuickViewAppearance(qv);
+            }
+        }
+
+        private void contextMenuStripQuickView_Opening(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            quickViewMenuTarget = contextMenuStripQuickView.SourceControl as QuickView;
+
+            var qv = quickViewMenuTarget;
+            bool editable = qv != null && !MainV2.DisplayConfiguration.lockQuickView;
+
+            blankQuickViewToolStripMenuItem.Enabled = editable;
+            quickViewColoursToolStripMenuItem.Enabled = editable;
+            blankQuickViewToolStripMenuItem.Checked =
+                qv != null && Settings.Instance.GetBoolean(qv.Name + "_blank");
+        }
+
+        private void blankQuickViewToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (MainV2.DisplayConfiguration.lockQuickView)
+                return;
+
+            var qv = quickViewMenuTarget;
+            if (qv == null)
+                return;
+
+            bool blank = !Settings.Instance.GetBoolean(qv.Name + "_blank");
+            Settings.Instance[qv.Name + "_blank"] = blank.ToString();
+
+            if (blank)
+            {
+                qv.desc = quickViewBlankText;
+                qv.nodata = true;
+            }
+            else
+            {
+                // put back whatever the view was showing before it was hidden
+                var savedLabel = Settings.Instance[qv.Name + "_label"];
+                if (!string.IsNullOrEmpty(savedLabel))
+                    qv.desc = savedLabel;
+                else if (qv.Tag != null)
+                    qv.desc = MainV2.comPort.MAV.cs.GetNameandUnit(qv.Tag.ToString());
+
+                // a view with no source stays dashed - that flag belongs to the binding, not to hiding
+                qv.nodata = qv.DataBindings.Count == 0;
+            }
+
+            qv.Invalidate();
+        }
+
+        private void quickViewLabelColourToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            pickQuickViewColour(true);
+        }
+
+        private void quickViewValueColourToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            pickQuickViewColour(false);
+        }
+
+        private void pickQuickViewColour(bool label)
+        {
+            if (MainV2.DisplayConfiguration.lockQuickView)
+                return;
+
+            var qv = quickViewMenuTarget;
+            if (qv == null)
+                return;
+
+            using (var dlg = new ColorDialog
+                   {
+                       FullOpen = true,
+                       AnyColor = true,
+                       Color = label ? qv.ForeColor : qv.numberColor
+                   })
+            {
+                if (dlg.ShowDialog(this) != DialogResult.OK)
+                    return;
+
+                writeQuickViewColor(qv.Name + (label ? "_labelcolor" : "_valuecolor"), dlg.Color);
+                applyQuickViewAppearance(qv);
+                qv.Invalidate();
+            }
+        }
+
+        private void resetQuickViewColoursToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (MainV2.DisplayConfiguration.lockQuickView)
+                return;
+
+            var qv = quickViewMenuTarget;
+            if (qv == null)
+                return;
+
+            writeQuickViewColor(qv.Name + "_labelcolor", null);
+            writeQuickViewColor(qv.Name + "_valuecolor", null);
+
+            // release the lock BEFORE re-theming, or the theme skips this view and the reset does nothing
+            qv.colourLocked = false;
+
+            // re-running the theme is the only way back to the shipped colour, but it repaints every view
+            // on the tab - hence the re-apply for the others
+            qv.ForeColor = ThemeManager.TextColor;
+            qv.foreColorBackup = qv.ForeColor;
+            ThemeManager.ApplyThemeTo(tabQuick);
+            applyQuickViewAppearanceAll();
+
+            qv.Invalidate();
         }
 
         private void NumberToBindingType(object sender, ConvertEventArgs e)
