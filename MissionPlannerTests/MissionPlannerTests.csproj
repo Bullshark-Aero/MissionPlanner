@@ -3,6 +3,11 @@
     <TargetFramework>net472</TargetFramework>
     <OutputType>Library</OutputType>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <!-- A library gets no .dll.config unless both are set, so the test host ran with no binding
+         redirects at all: anything touching ParameterMetaDataRepository died on a
+         Microsoft.Extensions.Options version mismatch before reaching the assertion. -->
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\ExtLibs\ArduPilot\MissionPlanner.ArduPilot.csproj" />

@@ -182,6 +182,57 @@ union px4_custom_mode {
             return null;
         }
 
+        //Plane modes the BSA airframe cannot use, withheld from the command surfaces only. Numbers, not
+        //names: the metadata's casing is inconsistent ("Manual", "CIRCLE", "Loiter to QLand") and the
+        //strings move between firmware releases, while the numbers are ArduPilot ABI.
+        //  3 TRAINING, 4 ACRO      - no defensible use on a 75kg VTOL
+        // 14 AVOID_ADSB            - entered by the avoidance logic, never selected by a pilot
+        // 16 INITIALISING          - a boot state MP appends itself, not a commandable mode
+        // 24 THERMAL               - soaring, needs SOAR_ENABLE and a glider airframe
+        public static readonly int[] NonVtolPlaneModes = { 3, 4, 14, 16, 24 };
+
+        static bool loggedModeCoverage;
+
+        /// <summary>
+        /// The modes an operator is allowed to command. Deliberately NOT the same list as
+        /// getModesList: that one also names incoming heartbeats (CurrentState), and a mode missing
+        /// from it would leave the HUD showing the previous mode after an RC-switch or failsafe change
+        /// into something we withheld - the GCS lying about the aircraft in the one case that matters.
+        /// </summary>
+        public static List<KeyValuePair<int, string>> getCommandableModesList(Firmwares firmware)
+        {
+            var all = getModesList(firmware);
+
+            //the withheld numbers mean other things on other vehicles (3 is Auto on Copter), so this
+            //must never apply to a firmware it was not chosen for
+            if (all == null || firmware != Firmwares.ArduPlane)
+                return all;
+
+            var commandable = filterToVtolCommandable(all);
+
+            if (!loggedModeCoverage)
+            {
+                loggedModeCoverage = true;
+                log.Info("VTOL mode filter: " + commandable.Count + " of " + all.Count +
+                         " ArduPlane modes commandable, withheld " +
+                         string.Join(", ", all.Where(m => NonVtolPlaneModes.Contains(m.Key))
+                             .Select(m => m.Value + "(" + m.Key + ")")));
+            }
+
+            return commandable;
+        }
+
+        /// <summary>Pure list filter, so it can be tested without the downloaded metadata behind
+        /// getModesList deciding what the machine running the test happens to have cached.</summary>
+        public static List<KeyValuePair<int, string>> filterToVtolCommandable(
+            List<KeyValuePair<int, string>> modes)
+        {
+            if (modes == null)
+                return null;
+
+            return modes.Where(mode => !NonVtolPlaneModes.Contains(mode.Key)).ToList();
+        }
+
         public static string speechConversion(MAVState MAV, string input)
         {
             if (MAV.cs.wpno == 0)

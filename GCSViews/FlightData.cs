@@ -348,9 +348,7 @@ namespace MissionPlanner.GCSViews
 
             CMB_action.DataSource = Enum.GetNames(typeof(actions));
 
-            CMB_modes.DataSource = ArduPilot.Common.getModesList(MainV2.comPort.MAV.cs.firmware);
-            CMB_modes.ValueMember = "Key";
-            CMB_modes.DisplayMember = "Value";
+            bindQuickModeList();
 
             //default to auto
             CMB_modes.Text = "Auto";
@@ -2887,12 +2885,39 @@ namespace MissionPlanner.GCSViews
             }
         }
 
+        //Binds the mode dropdown to the modes an operator may command, not to the full list - see
+        //Common.getCommandableModesList. If the aircraft is currently in a mode we withhold (entered by
+        //RC switch, failsafe or a mission DO_SET_MODE) that one mode is appended for this bind: the
+        //combo is a DropDownList, which silently blanks when asked to show a value it does not carry,
+        //and a blank mode box during an off-nominal mode is the worst moment to say nothing.
+        private void bindQuickModeList()
+        {
+            var modes = ArduPilot.Common.getCommandableModesList(MainV2.comPort.MAV.cs.firmware);
+
+            if (modes != null)
+            {
+                var live = MainV2.comPort.MAV.cs.mode;
+
+                if (!string.IsNullOrEmpty(live) &&
+                    !modes.Any(m => string.Equals(m.Value, live, StringComparison.OrdinalIgnoreCase)))
+                {
+                    var full = ArduPilot.Common.getModesList(MainV2.comPort.MAV.cs.firmware);
+
+                    if (full != null)
+                        modes.AddRange(full.Where(m =>
+                            string.Equals(m.Value, live, StringComparison.OrdinalIgnoreCase)));
+                }
+            }
+
+            CMB_modes.DataSource = modes;
+            CMB_modes.ValueMember = "Key";
+            CMB_modes.DisplayMember = "Value";
+        }
+
         private void CMB_modes_Click(object sender, EventArgs e)
         {
             string current_value = CMB_modes.Text;
-            CMB_modes.DataSource = ArduPilot.Common.getModesList(MainV2.comPort.MAV.cs.firmware);
-            CMB_modes.ValueMember = "Key";
-            CMB_modes.DisplayMember = "Value";
+            bindQuickModeList();
             CMB_modes.Text = current_value;
         }
 

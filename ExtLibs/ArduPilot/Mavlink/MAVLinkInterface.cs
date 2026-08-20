@@ -6673,7 +6673,10 @@ Mission Planner waits for 2 valid heartbeat packets before connecting
 
             try
             {
-                List<KeyValuePair<int, string>> modelist = Common.getModesList(MAVlist[sysid, compid].cs.firmware);
+                // the commandable list, not the full one - this is the single funnel every
+                // setMode(..., string) reaches, so refusing here covers the UI, the joystick and plugins
+                List<KeyValuePair<int, string>> modelist =
+                    Common.getCommandableModesList(MAVlist[sysid, compid].cs.firmware);
 
                 foreach (KeyValuePair<int, string> pair in modelist)
                 {
@@ -6686,7 +6689,13 @@ Mission Planner waits for 2 valid heartbeat packets before connecting
 
                 if (mode.base_mode == 0)
                 {
-                    log.Error("No Mode Changed " + modein);
+                    // a withheld mode and a misspelt one both refuse, but only one of them is a bug
+                    var withheld = Common.getModesList(MAVlist[sysid, compid].cs.firmware)
+                        ?.Any(pair => pair.Value.ToLower() == modein.ToLower()) == true;
+
+                    log.Error(withheld
+                        ? "Mode not commandable on this airframe " + modein
+                        : "No Mode Changed " + modein);
                     return false;
                 }
             }
