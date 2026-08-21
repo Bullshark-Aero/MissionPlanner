@@ -114,23 +114,53 @@ namespace MissionPlanner.Controls
             {
                 var numb = _nodata ? nodatatext : number.ToString(numberformat);
 
-                Size extent = e.MeasureString("0".PadLeft(numb.Length+1,'0'), new Font(this.Font.FontFamily, (float)newSize, this.Font.Style)).ToSize();
+                //Sized to the widest string this view could show, so the number does not restyle
+                //itself every time the value gains or loses a digit.
+                var size = fitFontSize("0".PadLeft(numb.Length + 1, '0'), e, this.Height - y);
 
-                float hRatio = (this.Height - y) / (float)(extent.Height);
-                float wRatio = this.Width / (float)extent.Width;
-                float ratio = (hRatio < wRatio) ? hRatio : wRatio;
+                using (var font = new Font(this.Font.FontFamily, size, this.Font.Style))
+                {
+                    Size extent = e.MeasureString(numb, font).ToSize();
 
-                newSize = (newSize * ratio);// * 0.75f; // pixel to points
-
-                newSize -= newSize % 5;
-
-                if (newSize < 8 || newSize > 999999)
-                    newSize = 8;
-
-                extent = e.MeasureString(numb, new Font(this.Font.FontFamily, (float)newSize, this.Font.Style)).ToSize();
-
-                e.DrawString(numb, new Font(this.Font.FontFamily, (float)newSize, this.Font.Style), new SolidBrush(_nodata ? nodatacolor : this.numberColor), this.Width / 2 - extent.Width / 2, y + ((this.Height - y) / 2 - extent.Height / 2));
+                    e.DrawString(numb, font, new SolidBrush(_nodata ? nodatacolor : this.numberColor),
+                        this.Width / 2 - extent.Width / 2, y + ((this.Height - y) / 2 - extent.Height / 2));
+                }
             }
+        }
+
+        /// <summary>
+        /// Largest font size that fits <paramref name="widest"/> into the space left under the
+        /// description.
+        ///
+        /// Derived from a fixed probe size on every paint. It used to be derived from the size the
+        /// previous paint happened to land on, which made the result depend on the control's resize
+        /// history rather than on its geometry: two identically sized views could settle on different
+        /// sizes, the size could oscillate as the value changed width, and one bad measurement was
+        /// permanent because nothing ever reset the carried value.
+        /// </summary>
+        float fitFontSize(string widest, SkiaGraphics e, int available)
+        {
+            float size;
+
+            using (var probe = new Font(this.Font.FontFamily, probeFontSize, this.Font.Style))
+            {
+                Size extent = e.MeasureString(widest, probe).ToSize();
+                if (extent.Width <= 0 || extent.Height <= 0)
+                    return minFontSize;
+
+                float hRatio = available / (float)extent.Height;
+                float wRatio = this.Width / (float)extent.Width;
+
+                size = probeFontSize * (hRatio < wRatio ? hRatio : wRatio);
+            }
+
+            //quantised, so a pixel of layout drift does not resize the number
+            size -= size % 5;
+
+            if (!(size >= minFontSize && size <= maxFontSize))
+                size = minFontSize;
+
+            return size;
         }
 
         public override void Refresh()
@@ -154,7 +184,9 @@ namespace MissionPlanner.Controls
                 base.OnInvalidated(e);
         }
 
-        float newSize = 8;
+        const float probeFontSize = 40f;
+        const float minFontSize = 8f;
+        const float maxFontSize = 999999f;
 
         protected override void OnResize(EventArgs e)
         {

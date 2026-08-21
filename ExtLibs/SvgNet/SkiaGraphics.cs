@@ -51,7 +51,10 @@ namespace System
         {
             var fm = SKFontManager.Default;
             var id = "";
+            SKTypeface typeface;
+
             lock (fontcache)
+            {
                 if (CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "zh")
                 {
                     id = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
@@ -75,13 +78,25 @@ namespace System
                 }
                 else
                 {
+                    var family = font.FontFamily != null ? font.FontFamily.Name : "";
+                    id = family + "/" + font.Style;
+
                     if (!fontcache.ContainsKey(id))
-                        fontcache[id] = SKTypeface.FromFamilyName(id);
+                        fontcache[id] = SKTypeface.FromFamilyName(family,
+                                            font.Bold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal,
+                                            SKFontStyleWidth.Normal,
+                                            font.Italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright);
                 }
+
+                //a family the machine does not have resolves to null, which would draw nothing
+                typeface = fontcache[id] ?? SKTypeface.Default;
+            }
 
             return new SKPaint
             {
-                Typeface = fontcache[id],
+                //read inside the lock: this used to index the dictionary after releasing it, which is
+                //a torn read away from a hang if another thread is growing the cache at the time
+                Typeface = typeface,
                 TextSize = font.SizeInPoints * 1.33334f,
                 StrokeWidth = 2,
             };
