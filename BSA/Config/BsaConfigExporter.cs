@@ -15,13 +15,23 @@ namespace MissionPlanner.BSA.Config
             KeyPolicyConfig policy, string checklistJsonPath, string keyPolicyJsonPath, string lockPolicyJsonPathOrNull,
             string version, string operatorName, string missionPlannerVersion, string releaseNotes)
         {
+            return Export(outputPath, liveConfig, policy, checklistJsonPath, keyPolicyJsonPath,
+                lockPolicyJsonPathOrNull, version, operatorName, missionPlannerVersion, releaseNotes, null, null);
+        }
+
+        public static PackageManifest Export(string outputPath, IReadOnlyDictionary<string, string> liveConfig,
+            KeyPolicyConfig policy, string checklistJsonPath, string keyPolicyJsonPath, string lockPolicyJsonPathOrNull,
+            string version, string operatorName, string missionPlannerVersion, string releaseNotes,
+            BsaBundleProfile profile, string packageId)
+        {
             if (liveConfig == null) throw new ArgumentNullException(nameof(liveConfig));
             if (policy == null) throw new ArgumentNullException(nameof(policy));
 
             var subset = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var kv in liveConfig)
             {
-                if (KeyClassifier.Classify(kv.Key, policy) == KeyClass.Portable)
+                if (!BsaQuickViewCodec.OwnsSetting(kv.Key) &&
+                    KeyClassifier.Classify(kv.Key, policy) == KeyClass.Portable)
                     subset[kv.Key] = kv.Value;
             }
 
@@ -37,7 +47,7 @@ namespace MissionPlanner.BSA.Config
             }
 
             return BsaConfigPackage.Write(outputPath, subset, checklistJsonPath, keyPolicyJsonPath,
-                lockPolicyJsonPathOrNull, version, operatorName, missionPlannerVersion, releaseNotes);
+                lockPolicyJsonPathOrNull, version, operatorName, missionPlannerVersion, releaseNotes, profile, packageId);
         }
     }
 }
