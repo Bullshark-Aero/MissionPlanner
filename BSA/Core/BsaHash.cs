@@ -25,6 +25,13 @@ namespace MissionPlanner.BSA.Core
                 return ToHex(sha.ComputeHash(Encoding.UTF8.GetBytes(text ?? string.Empty)));
         }
 
+        public static string ComputeSha256Hex(byte[] bytes)
+        {
+            if (bytes == null) throw new ArgumentNullException(nameof(bytes));
+            using (var sha = SHA256.Create())
+                return ToHex(sha.ComputeHash(bytes));
+        }
+
         public static string HashFile(string path)
         {
             using (var sha = SHA256.Create())
