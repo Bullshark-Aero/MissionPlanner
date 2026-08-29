@@ -23,7 +23,9 @@ namespace MissionPlanner.BSA.Config
         {
             if (legacyPackage == null || !legacyPackage.IsLegacy)
                 throw new InvalidDataException("Only a validated legacy package can use the Judicar migration adapter.");
-            var settings = new Dictionary<string, string>(legacyPackage.ConfigSubset, StringComparer.Ordinal);
+            var settings = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var setting in legacyPackage.ConfigSubset)
+                settings[setting.Key] = setting.Value;
             if (!settings.ContainsKey("quickViewRows")) settings["quickViewRows"] = "6";
             if (!settings.ContainsKey("quickViewCols")) settings["quickViewCols"] = "5";
             var quickView = BsaQuickViewCodec.Export(settings, ApprovedBindingMap);
