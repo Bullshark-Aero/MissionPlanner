@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImportWindowsDesktopTargets>true</ImportWindowsDesktopTargets>
+    <AssemblyName>Judicar2600Lights</AssemblyName>
+    <RootNamespace>BSA.Judicar2600.MissionPlannerPlugins</RootNamespace>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="MissionPlanner">
+      <HintPath>..\..\bin\Release\net461\MissionPlanner.exe</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="MissionPlanner.Controls">
+      <HintPath>..\..\bin\Release\net461\MissionPlanner.Controls.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="MissionPlanner.ArduPilot">
+      <HintPath>..\..\bin\Release\net461\MissionPlanner.ArduPilot.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="MAVLink">
+      <HintPath>..\..\bin\Release\net461\MAVLink.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

@@ -19,6 +19,7 @@ namespace MissionPlanner.BSA.Config
     public static class BsaConfigComposition
     {
         const string DefaultKeyPolicyRelativePath = "BSA\\DefaultConfig\\bsa_key_policy.default.json";
+        const string DefaultPluginTrustStoreRelativePath = "BSA\\DefaultConfig\\plugin-trust.default.json";
         const string UserKeyPolicyFileName = "bsa_key_policy.json";
         const string LockPolicyFileName = "lock_policy.json";
 
@@ -89,8 +90,18 @@ namespace MissionPlanner.BSA.Config
 
         // ----- WP2 Phase B: import -----
 
-        public static ImportValidationResult ValidateImport(string packagePath) =>
-            BsaConfigImporter.Validate(packagePath, Application.ProductVersion);
+        public static string ResolvePluginTrustStorePath()
+        {
+            var shippedPath = Path.Combine(Settings.GetRunningDirectory(), DefaultPluginTrustStoreRelativePath);
+            return BsaPluginTrustStoreProvisioner.ProvisionFromShippedDefault(
+                shippedPath, BsaPaths.PluginTrustStorePath);
+        }
+
+        public static ImportValidationResult ValidateImport(string packagePath)
+        {
+            ResolvePluginTrustStorePath();
+            return BsaConfigImporter.Validate(packagePath, Application.ProductVersion);
+        }
 
         public static List<ConfigDiffGroup> DiffImport(ConfigPackageContents package)
         {

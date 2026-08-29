@@ -27,6 +27,7 @@ namespace MissionPlanner.BSA.Config
         public bool SettingsFileExisted { get; set; }
         public string InstallStatePath { get; set; }
         public Dictionary<string, string> ExpectedHashes { get; set; } = new Dictionary<string, string>();
+        public Dictionary<string, string> ExpectedSettings { get; set; } = new Dictionary<string, string>();
         public string Failure { get; set; }
     }
 
@@ -181,10 +182,10 @@ namespace MissionPlanner.BSA.Config
                 journal.Status = BsaTransactionStatus.Applying;
                 WriteJournal(root, journal);
                 changed = BsaConfigImporter.Apply(liveConfig, package, approvedKeys ?? Enumerable.Empty<string>(), policy);
+                foreach (var key in changed)
+                    journal.ExpectedSettings[key] = liveConfig[key];
                 saveSettings();
                 checkpoint?.Invoke("settings-saved");
-                if (!string.IsNullOrWhiteSpace(settingsFilePath) && File.Exists(settingsFilePath))
-                    journal.ExpectedHashes[settingsFilePath] = BsaHash.HashFile(settingsFilePath);
 
                 var stageIndex = 1;
                 for (var index = 0; index < journal.Files.Count; index++)
@@ -254,6 +255,7 @@ namespace MissionPlanner.BSA.Config
                     try
                     {
                         VerifyHashes(journal);
+                        VerifySettings(journal, liveConfig);
                         journal.Status = BsaTransactionStatus.Verified;
                         WriteJournal(Path.GetDirectoryName(journalPath), journal);
                         MarkInstallStateCommitted(journal);
@@ -280,6 +282,16 @@ namespace MissionPlanner.BSA.Config
             foreach (var item in before) liveConfig[item.Key] = item.Value;
             saveSettings();
             RestoreExactSettingsFile(journal);
+        }
+
+        static void VerifySettings(BsaTransactionJournal journal, IDictionary<string, string> liveConfig)
+        {
+            foreach (var expected in journal.ExpectedSettings ?? new Dictionary<string, string>())
+            {
+                string actual;
+                if (!liveConfig.TryGetValue(expected.Key, out actual) || !string.Equals(actual, expected.Value, StringComparison.Ordinal))
+                    throw new InvalidDataException("Imported setting failed verification: " + expected.Key);
+            }
         }
 
         static void StagePluginTargets(ConfigPackageContents package, IDictionary<string, byte[]> targets, string pluginDirectory)

@@ -61,7 +61,7 @@ namespace MissionPlanner.BSA.Config
                         if (!rsa.VerifyData(signedBytes, signatureBytes, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1))
                             continue;
                     }
-                    ValidateDescriptors(package, payloads, archive);
+                    ValidateDescriptors(package, payloads, archive, signature.KeyId);
                     return;
                 }
             }
@@ -83,12 +83,15 @@ namespace MissionPlanner.BSA.Config
             })
         });
 
-        static void ValidateDescriptors(ConfigPackageContents package, IReadOnlyCollection<PackageComponent> payloads, ZipArchive archive)
+        static void ValidateDescriptors(ConfigPackageContents package, IReadOnlyCollection<PackageComponent> payloads,
+            ZipArchive archive, string verifiedPublisherKeyId)
         {
             foreach (var descriptor in package.Plugins)
             {
                 if (descriptor == null || !SafePluginId.IsMatch(descriptor.PluginId ?? string.Empty) || string.IsNullOrWhiteSpace(descriptor.EntryType))
                     throw new InvalidDataException("Plugin descriptor identity and entry type are required.");
+                if (!string.Equals(descriptor.PublisherKeyId, verifiedPublisherKeyId, StringComparison.Ordinal))
+                    throw new InvalidDataException("Plugin descriptor publisher does not match the verified signing key.");
                 var payload = payloads.SingleOrDefault(c => c.Path == descriptor.PayloadPath);
                 if (payload == null || descriptor.PayloadSha256 != payload.Sha256)
                     throw new InvalidDataException("Plugin descriptor does not match its declared payload.");
