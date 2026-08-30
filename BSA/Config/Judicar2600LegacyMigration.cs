@@ -15,8 +15,7 @@ namespace MissionPlanner.BSA.Config
                 ["customfield4"] = "MAV_ESC_HOT", ["customfield5"] = "MAV_CHT_HOT",
                 ["customfield6"] = "MAV_FR_MOT_T", ["customfield7"] = "MAV_LIFT_HDR",
                 ["customfield8"] = "MAV_SURF_HDR", ["customfield9"] = "MAV_ATT_ERR5",
-                ["customfield10"] = "MAV_ALT_ERR5", ["customfield11"] = "MAV_LIDAR_M",
-                ["customfield12"] = "airspeed"
+                ["customfield10"] = "MAV_ALT_ERR5", ["customfield11"] = "MAV_LIDAR_M"
             };
 
         public static BsaBundleProfile CreateProfile(ConfigPackageContents legacyPackage)
@@ -26,6 +25,15 @@ namespace MissionPlanner.BSA.Config
             var settings = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var setting in legacyPackage.ConfigSubset)
                 settings[setting.Key] = setting.Value;
+            foreach (var key in new List<string>(settings.Keys))
+            {
+                if (key.StartsWith("quickView", StringComparison.Ordinal) &&
+                    settings[key] == "customfield12")
+                {
+                    settings.Remove(key);
+                    settings[key + "_blank"] = "True";
+                }
+            }
             if (!settings.ContainsKey("quickViewRows")) settings["quickViewRows"] = "6";
             if (!settings.ContainsKey("quickViewCols")) settings["quickViewCols"] = "5";
             var quickView = BsaQuickViewCodec.Export(settings, ApprovedBindingMap);
