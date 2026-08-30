@@ -80,7 +80,7 @@ namespace MissionPlanner.BSA.Tests
                 Assert.AreEqual((int?)2, read.Manifest.SchemaVersion);
                 Assert.IsTrue(read.HasCompleteCoreProfile);
                 Assert.AreEqual("MAV_ESC_HOT", read.QuickView.Cells[0].SourceId);
-                Assert.AreEqual(13, read.TelemetryBindings.Bindings.Count);
+                Assert.AreEqual(12, read.TelemetryBindings.Bindings.Count);
                 Assert.AreEqual(3, read.Warnings.Rules.Count);
                 Assert.AreEqual(3, read.HealthRules.Rules.Count);
             }
