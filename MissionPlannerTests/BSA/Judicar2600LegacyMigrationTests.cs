@@ -20,7 +20,7 @@ namespace MissionPlanner.BSA.Tests
             var profile = Judicar2600LegacyMigration.CreateProfile(legacy);
 
             Assert.AreEqual("MAV_VTOL_RES", profile.QuickView.Cells[0].SourceId);
-            Assert.AreEqual("MAV_AS_DIF5", profile.QuickView.Cells[1].SourceId);
+            Assert.AreEqual("airspeed", profile.QuickView.Cells[1].SourceId);
         }
     }
 }

@@ -16,7 +16,7 @@ namespace MissionPlanner.BSA.Config
                 ["customfield6"] = "MAV_FR_MOT_T", ["customfield7"] = "MAV_LIFT_HDR",
                 ["customfield8"] = "MAV_SURF_HDR", ["customfield9"] = "MAV_ATT_ERR5",
                 ["customfield10"] = "MAV_ALT_ERR5", ["customfield11"] = "MAV_LIDAR_M",
-                ["customfield12"] = "MAV_AS_DIF5"
+                ["customfield12"] = "airspeed"
             };
 
         public static BsaBundleProfile CreateProfile(ConfigPackageContents legacyPackage)
