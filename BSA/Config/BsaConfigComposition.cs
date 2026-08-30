@@ -19,6 +19,7 @@ namespace MissionPlanner.BSA.Config
     public static class BsaConfigComposition
     {
         const string DefaultKeyPolicyRelativePath = "BSA\\DefaultConfig\\bsa_key_policy.default.json";
+        const string DefaultPluginTrustStoreRelativePath = "BSA\\DefaultConfig\\plugin-trust.default.json";
         const string UserKeyPolicyFileName = "bsa_key_policy.json";
         const string LockPolicyFileName = "lock_policy.json";
 
@@ -69,6 +70,8 @@ namespace MissionPlanner.BSA.Config
         {
             _ = Settings.Instance; // ensure Settings.config has been lazy-loaded from disk
             var policy = KeyPolicyLoader.Load(ResolveKeyPolicyPath());
+            var quickView = BsaQuickViewCodec.Export(Settings.config, CurrentState.custom_field_names);
+            var profile = Judicar2600BundleProfile.Create(quickView);
 
             return BsaConfigExporter.Export(
                 outputPath,
@@ -80,13 +83,25 @@ namespace MissionPlanner.BSA.Config
                 version,
                 operatorName,
                 Application.ProductVersion,
-                releaseNotes);
+                releaseNotes,
+                profile,
+                Judicar2600BundleProfile.PackageId);
         }
 
         // ----- WP2 Phase B: import -----
 
-        public static ImportValidationResult ValidateImport(string packagePath) =>
-            BsaConfigImporter.Validate(packagePath, Application.ProductVersion);
+        public static string ResolvePluginTrustStorePath()
+        {
+            var shippedPath = Path.Combine(Settings.GetRunningDirectory(), DefaultPluginTrustStoreRelativePath);
+            return BsaPluginTrustStoreProvisioner.ProvisionFromShippedDefault(
+                shippedPath, BsaPaths.PluginTrustStorePath);
+        }
+
+        public static ImportValidationResult ValidateImport(string packagePath)
+        {
+            ResolvePluginTrustStorePath();
+            return BsaConfigImporter.Validate(packagePath, Application.ProductVersion);
+        }
 
         public static List<ConfigDiffGroup> DiffImport(ConfigPackageContents package)
         {
@@ -133,6 +148,27 @@ namespace MissionPlanner.BSA.Config
             }
 
             return changed;
+        }
+
+        public static BsaBundleApplyResult ApplyBundleImport(ConfigPackageContents package,
+            IEnumerable<string> approvedKeys, BsaBundleApplyOptions options)
+        {
+            _ = Settings.Instance;
+            var policy = KeyPolicyLoader.Load(ResolveKeyPolicyPath());
+            var result = BsaBundleTransaction.Apply(package, Settings.config, approvedKeys, policy,
+                Warnings.WarningEngine.warnings, SaveWithRetry, Warnings.WarningEngine.warningconfigfile,
+                BsaPaths.ConfigDirectory, BsaPaths.TransactionsDirectory,
+                Path.Combine(Settings.GetRunningDirectory(), "plugins"), options,
+                Path.Combine(Settings.GetUserDataDirectory(), Settings.FileName));
+            BsaLockService.Instance.CheckAction("mp_setting_change", "configuration_bundle_import");
+            BsaLockService.Instance.Invalidate("A BSA configuration bundle was imported while the operational lock was armed.");
+            return result;
+        }
+
+        public static void RecoverBundleTransactionsAtStartup()
+        {
+            _ = Settings.Instance;
+            BsaBundleTransaction.RecoverAndVerify(BsaPaths.TransactionsDirectory, Settings.config, SaveWithRetry);
         }
 
         /// <summary>Installs the BSA config files the package carries (checklist / key policy / lock

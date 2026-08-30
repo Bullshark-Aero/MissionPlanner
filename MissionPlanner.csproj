@@ -54,6 +54,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="APMPlannerXplanes\**" />
+    <Compile Remove="BSA\Plugins\**" />
     <Compile Remove="ExtLibs\**" />
     <Compile Remove="MissionPlannerTests\**" />
     <Compile Remove="Msi\**" />
@@ -739,6 +740,9 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="BSA\DefaultConfig\lock_policy.default.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="BSA\DefaultConfig\plugin-trust.default.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="dataflashlog.xml">

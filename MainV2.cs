@@ -1042,6 +1042,8 @@ namespace MissionPlanner
             }
 
             Warnings.CustomWarning.defaultsrc = comPort.MAV.cs;
+            MissionPlanner.BSA.Config.BsaConfigComposition.RecoverBundleTransactionsAtStartup();
+            MissionPlanner.BSA.Telemetry.JudicarHealthComposition.Initialize();
             Warnings.WarningEngine.Start(speechEnable ? speechEngine : null);
             Warnings.WarningEngine.WarningMessage += (sender, s) => { MainV2.comPort.MAV.cs.messageHigh = s; };
             Warnings.WarningEngine.QuickPanelColoring += WarningEngine_QuickPanelColoring;
@@ -2008,6 +2010,7 @@ namespace MissionPlanner
             base.OnClosing(e);
 
             log.Info("MainV2_FormClosing");
+            MissionPlanner.BSA.Telemetry.JudicarHealthComposition.Shutdown();
 
             log.Info("GMaps write cache");
             // speed up tile saving on exit

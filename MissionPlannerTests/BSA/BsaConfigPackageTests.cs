@@ -58,6 +58,41 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
+        public void RoundTrip_V2OperationalProfile_PreservesAllCoreComponents()
+        {
+            var checklistPath = TempJsonFile();
+            var keyPolicyPath = TempJsonFile();
+            var outputPath = TempPackagePath();
+            try
+            {
+                var quickView = new BsaQuickViewProfile
+                {
+                    Rows = 1,
+                    Columns = 1,
+                    Cells = { new BsaQuickViewCell { Position = 1, SourceId = "MAV_ESC_HOT", Label = "ESC" } }
+                };
+                var profile = Judicar2600BundleProfile.Create(quickView);
+                BsaConfigPackage.Write(outputPath, new Dictionary<string, string>(), checklistPath, keyPolicyPath,
+                    null, "1.0.0", "op", "1.3.83", "first hover", profile,
+                    Judicar2600BundleProfile.PackageId);
+
+                var read = BsaConfigPackage.Read(outputPath);
+                Assert.AreEqual((int?)2, read.Manifest.SchemaVersion);
+                Assert.IsTrue(read.HasCompleteCoreProfile);
+                Assert.AreEqual("MAV_ESC_HOT", read.QuickView.Cells[0].SourceId);
+                Assert.AreEqual(12, read.TelemetryBindings.Bindings.Count);
+                Assert.AreEqual(3, read.Warnings.Rules.Count);
+                Assert.AreEqual(3, read.HealthRules.Rules.Count);
+            }
+            finally
+            {
+                File.Delete(checklistPath);
+                File.Delete(keyPolicyPath);
+                if (File.Exists(outputPath)) File.Delete(outputPath);
+            }
+        }
+
+        [TestMethod]
         public void LockPolicy_IncludedWhenPathGiven_OmittedWhenNull()
         {
             var checklistPath = TempJsonFile();
