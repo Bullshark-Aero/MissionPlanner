@@ -111,6 +111,46 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
+        public void Apply_QuickViewRemoval_IsJournalledAndVerifiedAsAbsent()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "BsaBundleTransactionTests_" + Guid.NewGuid().ToString("N"));
+            var bsa = Path.Combine(root, "BSA", "config");
+            var transactions = Path.Combine(root, "BSA", "transactions");
+            var warning = Path.Combine(root, "warnings.xml");
+            var settingsFile = Path.Combine(root, "config.xml");
+            Directory.CreateDirectory(bsa);
+            var live = new Dictionary<string, string>
+            {
+                ["distunits"] = "0",
+                ["quickView1_labelcolor"] = "Color [Red]"
+            };
+            Action save = () => File.WriteAllText(settingsFile, string.Join(";", live));
+            try
+            {
+                var result = BsaBundleTransaction.Apply(Package(), live, new[] { "distunits" }, Policy(),
+                    new List<CustomWarning>(), save, warning, bsa, transactions, Path.Combine(root, "plugins"),
+                    new BsaBundleApplyOptions(), settingsFile);
+
+                Assert.AreEqual(BsaTransactionStatus.PendingRestart, result.Status);
+                Assert.IsFalse(live.ContainsKey("quickView1_labelcolor"));
+                var pending = Newtonsoft.Json.JsonConvert.DeserializeObject<BsaTransactionJournal>(
+                    File.ReadAllText(Path.Combine(result.TransactionDirectory, "journal.json")));
+                CollectionAssert.Contains(pending.ExpectedMissingSettings, "quickView1_labelcolor");
+
+                BsaBundleTransaction.RecoverAndVerify(transactions, live, save);
+
+                var committed = Newtonsoft.Json.JsonConvert.DeserializeObject<BsaTransactionJournal>(
+                    File.ReadAllText(Path.Combine(result.TransactionDirectory, "journal.json")));
+                Assert.AreEqual(BsaTransactionStatus.Committed, committed.Status);
+                Assert.IsFalse(live.ContainsKey("quickView1_labelcolor"));
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, true);
+            }
+        }
+
+        [TestMethod]
         public void RestartVerification_AllowsSettingsFileNormalizationWhenImportedValuesMatch()
         {
             var root = Path.Combine(Path.GetTempPath(), "BsaBundleTransactionTests_" + Guid.NewGuid().ToString("N"));

@@ -28,6 +28,7 @@ namespace MissionPlanner.BSA.Config
         public string InstallStatePath { get; set; }
         public Dictionary<string, string> ExpectedHashes { get; set; } = new Dictionary<string, string>();
         public Dictionary<string, string> ExpectedSettings { get; set; } = new Dictionary<string, string>();
+        public List<string> ExpectedMissingSettings { get; set; } = new List<string>();
         public string Failure { get; set; }
     }
 
@@ -182,8 +183,14 @@ namespace MissionPlanner.BSA.Config
                 journal.Status = BsaTransactionStatus.Applying;
                 WriteJournal(root, journal);
                 changed = BsaConfigImporter.Apply(liveConfig, package, approvedKeys ?? Enumerable.Empty<string>(), policy);
-                foreach (var key in changed)
-                    journal.ExpectedSettings[key] = liveConfig[key];
+                foreach (var key in changed.Distinct(StringComparer.Ordinal))
+                {
+                    string value;
+                    if (liveConfig.TryGetValue(key, out value))
+                        journal.ExpectedSettings[key] = value;
+                    else
+                        journal.ExpectedMissingSettings.Add(key);
+                }
                 saveSettings();
                 checkpoint?.Invoke("settings-saved");
 
@@ -291,6 +298,11 @@ namespace MissionPlanner.BSA.Config
                 string actual;
                 if (!liveConfig.TryGetValue(expected.Key, out actual) || !string.Equals(actual, expected.Value, StringComparison.Ordinal))
                     throw new InvalidDataException("Imported setting failed verification: " + expected.Key);
+            }
+            foreach (var key in journal.ExpectedMissingSettings ?? new List<string>())
+            {
+                if (liveConfig.ContainsKey(key))
+                    throw new InvalidDataException("Imported setting should be absent: " + key);
             }
         }
 
