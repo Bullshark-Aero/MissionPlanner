@@ -13,15 +13,20 @@ namespace BSA.Judicar2600.MissionPlannerPlugins
         private const int Light2Servo = 16;
         private const int OffPwm = 1000;
         private const int OnPwm = 1900;
-        private const int OnThresholdPwm = 1800;
+        private const byte AutopilotComponentId =
+            (byte)MAVLink.MAV_COMPONENT.MAV_COMP_ID_AUTOPILOT1;
 
         private MyButton lightsButton;
         private ToolTip lightsToolTip;
         private TableLayoutPanel actionsTable;
         private int lightsRow = -1;
+        private LightsCommandState commandState = LightsCommandState.Unknown;
+        private bool commandInProgress;
+        private bool lastLinkConnected;
+        private byte lastSystemId;
 
         public override string Name { get { return "Judicar 2600 Aircraft Lights"; } }
-        public override string Version { get { return "1.0.2"; } }
+        public override string Version { get { return "1.1.0"; } }
         public override string Author { get { return "BSA"; } }
 
         public override bool Init()
@@ -42,7 +47,7 @@ namespace BSA.Judicar2600.MissionPlannerPlugins
             lightsToolTip = new ToolTip();
             lightsToolTip.SetToolTip(
                 lightsButton,
-                "Confirmed toggle of both Judicar 2600 aircraft lights (SERVO15 and SERVO16 only)."
+                "Commands both Judicar 2600 aircraft lights together (SERVO15 and SERVO16 only)."
             );
 
             actionsTable = FindTableLayout(MainV2.instance.FlightData.tabActions);
@@ -66,7 +71,7 @@ namespace BSA.Judicar2600.MissionPlannerPlugins
             actionsTable.RowStyles[lightsRow].Height = actionRowHeight;
             actionsTable.Controls.Add(lightsButton, 0, lightsRow);
             actionsTable.SetColumnSpan(lightsButton, 1);
-            UpdateButtonFromTelemetry();
+            RefreshButton();
             return true;
         }
 
@@ -79,11 +84,11 @@ namespace BSA.Judicar2600.MissionPlannerPlugins
 
             if (lightsButton.InvokeRequired)
             {
-                lightsButton.BeginInvoke((Action)UpdateButtonFromTelemetry);
+                lightsButton.BeginInvoke((Action)RefreshButton);
             }
             else
             {
-                UpdateButtonFromTelemetry();
+                RefreshButton();
             }
 
             return true;
@@ -161,27 +166,44 @@ namespace BSA.Judicar2600.MissionPlannerPlugins
 
         private void ToggleLights(object sender, EventArgs e)
         {
+            byte systemId;
+            if (!TryGetAutopilotTarget(out systemId))
+            {
+                commandState = LightsCommandState.Unknown;
+                RefreshButton();
+                MessageBox.Show(
+                    "No live vehicle link is available. No light command was sent.",
+                    "Judicar 2600 Aircraft Lights",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
+                return;
+            }
+
+            commandInProgress = true;
             lightsButton.Enabled = false;
             try
             {
-                float servo15 = MainV2.comPort.MAV.cs.ch15out;
-                float servo16 = MainV2.comPort.MAV.cs.ch16out;
-                bool bothOn = IsOn(servo15) && IsOn(servo16);
-                int targetPwm = bothOn ? OffPwm : OnPwm;
-                string targetName = bothOn ? "OFF" : "ON";
+                int targetPwm = Judicar2600LightsState.NextTargetPwm(
+                    commandState,
+                    OnPwm,
+                    OffPwm
+                );
+                string targetName = targetPwm == OnPwm ? "ON" : "OFF";
+                string stateExplanation = commandState == LightsCommandState.Unknown
+                    ? "The current light state is unknown, so this first command will establish the aircraft default ON state.\n\n"
+                    : "";
 
                 string prompt =
                     "Command BOTH Judicar 2600 aircraft lights " + targetName + "?\n\n" +
-                    "Current reported outputs:\n" +
-                    "  SERVO15: " + servo15.ToString("0") + " us\n" +
-                    "  SERVO16: " + servo16.ToString("0") + " us\n\n" +
+                    stateExplanation +
                     "Only SERVO15 and SERVO16 will be commanded.";
 
                 DialogResult confirmation = MessageBox.Show(
                     prompt,
                     "Judicar 2600 Aircraft Lights",
                     MessageBoxButtons.YesNo,
-                    bothOn ? MessageBoxIcon.Warning : MessageBoxIcon.Question,
+                    targetPwm == OffPwm ? MessageBoxIcon.Warning : MessageBoxIcon.Question,
                     MessageBoxDefaultButton.Button2
                 );
 
@@ -190,24 +212,37 @@ namespace BSA.Judicar2600.MissionPlannerPlugins
                     return;
                 }
 
-                bool light1Accepted = SetServo(Light1Servo, targetPwm);
-                bool light2Accepted = SetServo(Light2Servo, targetPwm);
+                ServoCommandResult light1 = SetServo(systemId, Light1Servo, targetPwm);
+                ServoCommandResult light2 = SetServo(systemId, Light2Servo, targetPwm);
+                bool light1Accepted = light1 == ServoCommandResult.Accepted;
+                bool light2Accepted = light2 == ServoCommandResult.Accepted;
 
                 if (!light1Accepted || !light2Accepted)
                 {
                     // The aircraft's defined default is lights ON. If a paired
                     // command is only partly accepted, make a best-effort return
                     // to that conservative state rather than leaving a split pair.
-                    bool recovery1Accepted = SetServo(Light1Servo, OnPwm);
-                    bool recovery2Accepted = SetServo(Light2Servo, OnPwm);
+                    ServoCommandResult recovery1 = SetServo(systemId, Light1Servo, OnPwm);
+                    ServoCommandResult recovery2 = SetServo(systemId, Light2Servo, OnPwm);
+                    bool recovery1Accepted = recovery1 == ServoCommandResult.Accepted;
+                    bool recovery2Accepted = recovery2 == ServoCommandResult.Accepted;
+                    commandState = Judicar2600LightsState.ResolveAfterAttempt(
+                        targetPwm,
+                        OnPwm,
+                        light1Accepted,
+                        light2Accepted,
+                        recovery1Accepted,
+                        recovery2Accepted
+                    );
 
                     MessageBox.Show(
                         "The paired light command was not fully accepted.\n\n" +
-                        "SERVO15 accepted: " + light1Accepted + "\n" +
-                        "SERVO16 accepted: " + light2Accepted + "\n\n" +
+                        "SERVO15: " + Describe(light1) + "\n" +
+                        "SERVO16: " + Describe(light2) + "\n\n" +
                         "Recovery toward the default ON state was attempted.\n" +
-                        "SERVO15 recovery accepted: " + recovery1Accepted + "\n" +
-                        "SERVO16 recovery accepted: " + recovery2Accepted,
+                        "SERVO15 recovery: " + Describe(recovery1) + "\n" +
+                        "SERVO16 recovery: " + Describe(recovery2) + "\n\n" +
+                        CommandStateExplanation(),
                         "Judicar 2600 Aircraft Lights",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Error
@@ -215,9 +250,14 @@ namespace BSA.Judicar2600.MissionPlannerPlugins
                     return;
                 }
 
-                lightsButton.Text = "AIRCRAFT LIGHTS: " + targetName + " CMD";
-                lightsButton.BackColor = targetPwm == OnPwm ? Color.DarkGreen : Color.DimGray;
-                lightsButton.ForeColor = Color.White;
+                commandState = Judicar2600LightsState.ResolveAfterAttempt(
+                    targetPwm,
+                    OnPwm,
+                    true,
+                    true,
+                    false,
+                    false
+                );
             }
             catch (Exception ex)
             {
@@ -231,61 +271,167 @@ namespace BSA.Judicar2600.MissionPlannerPlugins
             }
             finally
             {
-                lightsButton.Enabled = true;
+                commandInProgress = false;
+                RefreshButton();
             }
         }
 
-        private static bool SetServo(int servoNumber, int pwm)
+        private static ServoCommandResult SetServo(byte systemId, int servoNumber, int pwm)
         {
-            return MainV2.comPort.doCommand(
-                (byte)MainV2.comPort.sysidcurrent,
-                (byte)MainV2.comPort.compidcurrent,
-                MAVLink.MAV_CMD.DO_SET_SERVO,
-                servoNumber,
-                pwm,
-                0,
-                0,
-                0,
-                0,
-                0
-            );
+            if (!LinkIsOpen())
+            {
+                return ServoCommandResult.LinkUnavailable;
+            }
+
+            try
+            {
+                bool accepted = MainV2.comPort.doCommand(
+                    systemId,
+                    AutopilotComponentId,
+                    MAVLink.MAV_CMD.DO_SET_SERVO,
+                    servoNumber,
+                    pwm,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                );
+                return accepted ? ServoCommandResult.Accepted : ServoCommandResult.Rejected;
+            }
+            catch (TimeoutException)
+            {
+                return ServoCommandResult.TimedOut;
+            }
+            catch
+            {
+                return ServoCommandResult.Failed;
+            }
         }
 
-        private static bool IsOn(float pwm)
+        private static bool LinkIsOpen()
         {
-            return pwm >= OnThresholdPwm;
+            return MainV2.comPort != null &&
+                   MainV2.comPort.BaseStream != null &&
+                   MainV2.comPort.BaseStream.IsOpen;
         }
 
-        private void UpdateButtonFromTelemetry()
+        private static bool TryGetAutopilotTarget(out byte systemId)
         {
-            if (lightsButton == null || lightsButton.IsDisposed || !lightsButton.Enabled)
+            systemId = 0;
+            if (!LinkIsOpen() || MainV2.comPort.sysidcurrent <= 0 ||
+                MainV2.comPort.sysidcurrent > byte.MaxValue)
+            {
+                return false;
+            }
+
+            systemId = (byte)MainV2.comPort.sysidcurrent;
+            return true;
+        }
+
+        private void RefreshButton()
+        {
+            if (lightsButton == null || lightsButton.IsDisposed)
             {
                 return;
             }
 
-            float servo15 = MainV2.comPort.MAV.cs.ch15out;
-            float servo16 = MainV2.comPort.MAV.cs.ch16out;
-            bool light1On = IsOn(servo15);
-            bool light2On = IsOn(servo16);
-
-            if (light1On && light2On)
+            byte systemId;
+            bool connected = TryGetAutopilotTarget(out systemId);
+            if (Judicar2600LightsState.ConnectionInvalidatesState(
+                    lastLinkConnected,
+                    lastSystemId,
+                    connected,
+                    systemId))
             {
-                lightsButton.Text = "AIRCRAFT LIGHTS: ON";
+                commandState = LightsCommandState.Unknown;
+            }
+
+            lastLinkConnected = connected;
+            if (connected)
+            {
+                lastSystemId = systemId;
+            }
+
+            if (commandInProgress)
+            {
+                return;
+            }
+
+            lightsButton.Enabled = connected;
+
+            if (!connected)
+            {
+                lightsButton.Text = "AIRCRAFT LIGHTS: NO LINK";
+                lightsButton.BackColor = Color.DarkRed;
+                lightsButton.ForeColor = Color.White;
+                lightsToolTip.SetToolTip(lightsButton, "No live vehicle link. No command can be sent.");
+            }
+            else if (commandState == LightsCommandState.CommandedOn)
+            {
+                lightsButton.Text = "AIRCRAFT LIGHTS: ON CMD";
                 lightsButton.BackColor = Color.DarkGreen;
                 lightsButton.ForeColor = Color.White;
+                lightsToolTip.SetToolTip(lightsButton, CommandStateExplanation());
             }
-            else if (!light1On && !light2On && servo15 > 0 && servo16 > 0)
+            else if (commandState == LightsCommandState.CommandedOff)
             {
-                lightsButton.Text = "AIRCRAFT LIGHTS: OFF";
+                lightsButton.Text = "AIRCRAFT LIGHTS: OFF CMD";
                 lightsButton.BackColor = Color.DimGray;
                 lightsButton.ForeColor = Color.White;
+                lightsToolTip.SetToolTip(lightsButton, CommandStateExplanation());
             }
             else
             {
-                lightsButton.Text = "AIRCRAFT LIGHTS: CHECK / RESTORE ON";
+                lightsButton.Text = "AIRCRAFT LIGHTS: SET ON";
                 lightsButton.BackColor = Color.DarkOrange;
                 lightsButton.ForeColor = Color.Black;
+                lightsToolTip.SetToolTip(
+                    lightsButton,
+                    "State unknown. Click to command both lights to the default ON state."
+                );
             }
+        }
+
+        private string CommandStateExplanation()
+        {
+            if (commandState == LightsCommandState.CommandedOn)
+            {
+                return "Both flight-controller commands were accepted for ON. This is command state, not physical lamp feedback.";
+            }
+
+            if (commandState == LightsCommandState.CommandedOff)
+            {
+                return "Both flight-controller commands were accepted for OFF. This is command state, not physical lamp feedback.";
+            }
+
+            return "The paired light state is unknown. Physical lamp feedback is not available.";
+        }
+
+        private static string Describe(ServoCommandResult result)
+        {
+            switch (result)
+            {
+                case ServoCommandResult.Accepted:
+                    return "accepted";
+                case ServoCommandResult.Rejected:
+                    return "rejected by the target";
+                case ServoCommandResult.TimedOut:
+                    return "timed out waiting for an ACK";
+                case ServoCommandResult.LinkUnavailable:
+                    return "not sent because the vehicle link was unavailable";
+                default:
+                    return "failed before an ACK was received";
+            }
+        }
+
+        private enum ServoCommandResult
+        {
+            Accepted,
+            Rejected,
+            TimedOut,
+            LinkUnavailable,
+            Failed
         }
     }
 }

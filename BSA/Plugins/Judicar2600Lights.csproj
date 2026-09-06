@@ -24,5 +24,9 @@
       <HintPath>..\..\bin\Release\net461\MAVLink.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="Interfaces">
+      <HintPath>..\..\bin\Release\net461\Interfaces.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 </Project>
