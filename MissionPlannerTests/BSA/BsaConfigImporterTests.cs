@@ -57,16 +57,15 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
-        public void Validate_DifferentMajorVersion_Warns_ButStillReturnsPackage()
+        public void Validate_V2WithoutMaximum_AllowsNewerMajorVersion()
         {
             var path = WritePackage(new Dictionary<string, string> { ["distunits"] = "0" }, "1.3.83");
             try
             {
                 var result = BsaConfigImporter.Validate(path, "2.0.0");
-                Assert.IsFalse(result.VersionCompatible);
-                StringAssert.Contains(result.VersionWarning, "1.3.83");
-                StringAssert.Contains(result.VersionWarning, "2.0.0");
-                Assert.IsNotNull(result.Package, "A version warning must never block validation from returning the package.");
+                Assert.IsTrue(result.VersionCompatible);
+                Assert.IsNull(result.VersionWarning);
+                Assert.IsNotNull(result.Package);
             }
             finally
             {
@@ -75,18 +74,10 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
-        public void Validate_MissingOrUnparseableVersion_NoWarning()
+        public void WriteV2_MissingCompatibilityVersion_IsRejected()
         {
-            var path = WritePackage(new Dictionary<string, string> { ["distunits"] = "0" }, "");
-            try
-            {
-                var result = BsaConfigImporter.Validate(path, "1.3.90");
-                Assert.IsTrue(result.VersionCompatible, "Absence of version data must not be treated as evidence of incompatibility.");
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            Assert.ThrowsException<InvalidDataException>(() =>
+                WritePackage(new Dictionary<string, string> { ["distunits"] = "0" }, ""));
         }
 
         [TestMethod]

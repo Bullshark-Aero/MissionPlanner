@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BSMP Lights Fix and Separate Release Plan</title>
+  <style>
+    body { max-width: 960px; margin: 32px auto; padding: 0 20px 48px; color: #17212b; background: #f5f7fa; font: 16px/1.55 system-ui, sans-serif; }
+    main { background: #fff; border: 1px solid #d7e0e8; border-radius: 10px; padding: 24px 28px; }
+    h1, h2 { line-height: 1.2; }
+    code { background: #eaf0f5; padding: 0.1rem 0.25rem; border-radius: 4px; overflow-wrap: anywhere; }
+    .meta { color: #52606d; }
+    section { margin-top: 24px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>BSMP Lights Fix and Separate Release Plan</h1>
+  <p class="meta">Status: approved for implementation · Version: v1.0.0 · Created: 2026-09-06 15:20 Europe/London</p>
+  <p class="meta">Exact filename: <code>bsmp-lights-fix-plan--202609061520--v1.0.0--release-and-separation.html</code></p>
+  <p class="meta">Predecessor: <code>None</code></p>
+
+  <section>
+    <h2>Objective</h2>
+    <p>Repair the Judicar 2600 paired-light control, publish the fix through a reviewable Mission Planner pull request, and deliver BSMP and the Judicar aircraft configuration as separate downloads. Every BSMP distribution from this release onward must extract into one version-and-release-date folder.</p>
+  </section>
+
+  <section>
+    <h2>Known fault</h2>
+    <p>The existing plugin infers the state of DroneCAN-backed outputs 15 and 16 from <code>SERVO_OUTPUT_RAW</code>. Those fields remain zero even when the physical lights work, so the plugin can choose the wrong action and report an unhelpful generic failure. Direct <code>MAV_CMD_DO_SET_SERVO</code> commands to the flight controller are accepted.</p>
+  </section>
+
+  <section>
+    <h2>Implementation</h2>
+    <ol>
+      <li>Build one integrated task branch containing the configuration-bundle feature, the v1.0.3 display and log-sorting fixes, and this repair; target the repository default branch with one pull request that documents the superseded partial PRs.</li>
+      <li>Remove the invalid telemetry inference. Treat light state as unknown after startup, link loss, or vehicle change. The first action from unknown safely establishes the default ON state; later actions alternate between OFF and ON using the last fully accepted paired command.</li>
+      <li>Target ArduPilot's flight-controller component explicitly, refuse commands without a live vehicle link, distinguish disconnected, timed-out, rejected, partial, and recovered outcomes, and label displayed state as command state rather than physical feedback.</li>
+      <li>Add deterministic tests for the state machine, paired-command outcomes, reconnect reset, and target selection. Run the complete existing Windows build and test suite.</li>
+      <li>Build and sign the revised lights plugin, then produce a new Judicar first-hover <code>.bsampconfig</code> containing that plugin and the existing aircraft-specific configuration. Validate signatures, hashes, manifest ownership, and clean-profile import.</li>
+      <li>Produce BSMP v1.0.4 as an application-only portable self-extractor. Its archive root must be exactly <code>BSMP 1.0.4 20260906</code>; it must not contain the Judicar <code>.bsampconfig</code> or an installed Judicar plugin.</li>
+      <li>Add a reusable packaging check so future BSMP releases fail if their root folder does not match <code>BSMP [version] [YYYYMMDD]</code> or if aircraft configuration files enter the application archive.</li>
+      <li>Inspect both deliverables, test extraction and launch on the shared Windows test VM, commit verified work with the bot identity, push only the task branch, and open the pull request.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Safety and rollback</h2>
+    <p>The command remains a two-output operation with recovery toward the aircraft's default ON state after a partial result. An accepted MAVLink command confirms flight-controller acceptance, not physical lamp state; the UI will say so. Rollback is BSMP v1.0.3 plus the preceding v1.3.0 Judicar bundle. No aircraft parameters or hardware are changed by this work.</p>
+  </section>
+
+  <section>
+    <h2>Acceptance</h2>
+    <p>Acceptance requires passing source tests and release builds; verified unknown, disconnected, success, failure, and recovery behaviours; a signed and cleanly importable standalone Judicar configuration; an application archive containing exactly one correctly named root folder and no aircraft bundle; successful clean Windows extraction and launch; recorded SHA-256 hashes; a pushed task branch; and an open, unmerged pull request.</p>
+  </section>
+</main>
+</body>
+</html>
