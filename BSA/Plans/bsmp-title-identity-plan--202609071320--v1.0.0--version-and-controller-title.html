@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BSMP title identity implementation plan</title>
+  <style>
+    body { max-width: 880px; margin: 2rem auto; padding: 0 1rem; font: 16px/1.5 system-ui, sans-serif; color: #172033; }
+    h1, h2 { line-height: 1.2; }
+    code { background: #eef2f7; padding: .1rem .3rem; border-radius: .2rem; }
+    li { margin: .4rem 0; }
+  </style>
+</head>
+<body>
+  <h1>BSMP title identity implementation plan</h1>
+  <p><strong>Status:</strong> approved for implementation · <strong>Version:</strong> v1.0.0 · <strong>Created:</strong> 2026-09-07 13:20 Europe/London</p>
+
+  <h2>Outcome</h2>
+  <p>Show an unambiguous BSMP, BSA firmware, upstream ArduPlane, flight-controller model, and controller UID identity in the application title after a vehicle connects.</p>
+
+  <h2>Implementation</h2>
+  <ol>
+    <li>Add one authoritative BSMP product-version value for the title.</li>
+    <li>Add a small BSA firmware release catalog keyed by the firmware commit reported over MAVLink. The initial verified mapping is Judicar firmware commit <code>98cc2c8f</code>: BSA ArduPlane <code>V1.4.1</code>, based on ArduPlane <code>V4.7.0</code>.</li>
+    <li>Format the connected title from the catalog, controller model, and canonical MAVLink UID. If firmware is not catalogued, retain the firmware identity reported by the aircraft and do not invent a BSA version.</li>
+    <li>Keep the disconnected title limited to the BSMP product identity.</li>
+    <li>Add focused tests for known firmware, unknown firmware, UID normalization, missing fields, and disconnected state.</li>
+  </ol>
+
+  <h2>Verification and delivery</h2>
+  <ol>
+    <li>Run focused tests and a Release build on the supported Windows build environment.</li>
+    <li>Inspect the resulting title using representative Judicar and unknown-firmware inputs.</li>
+    <li>Commit on <code>platform/mission-planner/identity-title</code>, push that task branch, and open a pull request to the default branch.</li>
+  </ol>
+
+  <h2>Rollback</h2>
+  <p>Revert the feature commit. No vehicle parameters, firmware, hardware, or persisted aircraft configuration are changed.</p>
+</body>
+</html>
