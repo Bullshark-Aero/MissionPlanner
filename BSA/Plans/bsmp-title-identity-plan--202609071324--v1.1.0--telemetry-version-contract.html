@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BSMP title identity implementation plan</title>
+  <style>
+    body { max-width: 880px; margin: 2rem auto; padding: 0 1rem; font: 16px/1.5 system-ui, sans-serif; color: #172033; }
+    h1, h2 { line-height: 1.2; }
+    code { background: #eef2f7; padding: .1rem .3rem; border-radius: .2rem; }
+    li { margin: .4rem 0; }
+  </style>
+</head>
+<body>
+  <h1>BSMP title identity implementation plan</h1>
+  <p><strong>Status:</strong> approved for implementation · <strong>Version:</strong> v1.1.0 · <strong>Created:</strong> 2026-09-07 13:24 Europe/London</p>
+  <p><strong>Predecessor:</strong> <code>bsmp-title-identity-plan--202609071320--v1.0.0--version-and-controller-title.html</code>. This revision removes the proposed firmware-hash catalog and defines a telemetry-owned BSA semantic-version contract.</p>
+
+  <h2>Outcome</h2>
+  <p>Show an unambiguous BSMP, BSA firmware, upstream ArduPlane, flight-controller model, and controller UID identity in the application title. BSMP must only show a BSA firmware version supplied by the connected autopilot.</p>
+
+  <h2>Telemetry contract</h2>
+  <p>A future BSA ArduPilot build will append <code>BSA V&lt;semver&gt;</code> to its normal firmware banner, for example <code>ArduPlane V4.7.0 (commit) BSA V1.5.0</code>. This remains within a MAVLink STATUSTEXT payload, is readable by ordinary ground stations, and is returned by the existing banner request. ArduPlane remains the authority for the upstream version; BSA firmware remains the authority for its semantic version.</p>
+
+  <h2>Implementation</h2>
+  <ol>
+    <li>Format the base BSMP title from the application product name and product version.</li>
+    <li>Parse only the explicit <code>BSA V&lt;semver&gt;</code> banner marker. Do not infer a BSA version from a commit hash.</li>
+    <li>When the marker is present, display <code>BullShark Mission Planner &lt;version&gt; ArduPlane V&lt;BSA version&gt; Based on V&lt;upstream version&gt; &lt;controller&gt; &lt;UID&gt;</code>.</li>
+    <li>When the marker is absent, show the ordinary reported firmware identity, controller, and UID without claiming a BSA version.</li>
+    <li>Prefer the canonical MAVLink UID2 value; normalize the legacy serial-banner UID only as a fallback.</li>
+    <li>Reset the title to the BSMP identity on disconnect.</li>
+    <li>Add focused tests for BSA and ordinary banners, prerelease semantic versions, invalid markers, canonical/fallback UID handling, missing fields, and disconnected state.</li>
+    <li>Add a durable Judicar firmware todo requiring the next BSA firmware release to emit and test the banner marker.</li>
+  </ol>
+
+  <h2>Verification and delivery</h2>
+  <ol>
+    <li>Run focused tests and a Release build on the supported Windows build environment.</li>
+    <li>Inspect representative generated titles, including the current firmware fallback and a future BSA banner.</li>
+    <li>Commit on <code>platform/mission-planner/identity-title</code>, push that task branch, and open a pull request to the default branch.</li>
+  </ol>
+
+  <h2>Rollback</h2>
+  <p>Revert the feature commit. No aircraft parameters, firmware, hardware, or persisted aircraft configuration are changed.</p>
+</body>
+</html>
