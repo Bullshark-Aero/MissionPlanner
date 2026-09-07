@@ -257,6 +257,12 @@ namespace MissionPlanner
         public float customfield18 { get; set; }
         public float customfield19 { get; set; }
 
+        // Stable local-only fields produced by the built-in Judicar health evaluator. These are not
+        // MAVLink fields and do not consume session-dependent customfield slots.
+        public float J26_DATA_OK { get; set; } = 1.0f;
+        public float J26_ESC_OK { get; set; } = 1.0f;
+        public float J26_GPS_RED_OK { get; set; } = 1.0f;
+
         // orientation - rads
         [DisplayFieldName("roll.Field")]
         [DisplayText("Roll (deg)")]

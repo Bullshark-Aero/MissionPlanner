@@ -1,0 +1,15 @@
+<Project>
+  <PropertyGroup>
+    <BsmpVersion Condition="'$(BsmpVersion)' == ''">1.0.6</BsmpVersion>
+  </PropertyGroup>
+  <Target Name="GenerateBsmpIdentity" BeforeTargets="CoreCompile" Condition="'$(BsmpVersion)' != ''">
+    <ItemGroup>
+      <BsmpIdentityAttribute Include="System.Reflection.AssemblyInformationalVersionAttribute">
+        <_Parameter1>$(BsmpVersion)</_Parameter1>
+      </BsmpIdentityAttribute>
+    </ItemGroup>
+    <WriteCodeFragment Language="C#" OutputFile="$(IntermediateOutputPath)BsmpIdentity.g.cs" AssemblyAttributes="@(BsmpIdentityAttribute)">
+      <Output TaskParameter="OutputFile" ItemName="Compile" />
+    </WriteCodeFragment>
+  </Target>
+</Project>

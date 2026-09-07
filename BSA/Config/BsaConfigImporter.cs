@@ -28,18 +28,40 @@ namespace MissionPlanner.BSA.Config
         {
             var package = BsaConfigPackage.Read(packagePath); // throws on missing/tampered/corrupted
 
+            if (!package.IsLegacy)
+                BsaPluginTrustValidator.Validate(packagePath, package, BSA.Core.BsaPaths.PluginTrustStorePath);
+
             return new ImportValidationResult
             {
                 Package = package,
-                VersionWarning = CheckVersionCompatibility(package.Manifest?.MissionPlannerVersion, runningMissionPlannerVersion)
+                VersionWarning = CheckVersionCompatibility(package.Manifest, runningMissionPlannerVersion)
             };
         }
 
-        /// <summary>Major-version mismatch only - never blocks, matches the doc's "import warns on
-        /// major mismatch" mitigation for MP version drift. Null (no warning) if either version string
-        /// is missing/unparseable - absence of data is not evidence of incompatibility.</summary>
-        static string CheckVersionCompatibility(string packageVersion, string runningVersion)
+        /// <summary>Schema 2 enforces BSMP version bounds and rejects unknown identities.
+        /// Legacy packages retain their advisory major-version check.</summary>
+        static string CheckVersionCompatibility(PackageManifest manifest, string runningVersion)
         {
+            var packageVersion = manifest?.MissionPlannerVersion;
+            if (manifest?.SchemaVersion == BsaConfigPackage.CurrentSchemaVersion)
+            {
+                if (!BsmpVersion.TryParse(runningVersion, out var running))
+                    throw new InvalidDataException("The running BSMP version cannot be verified: '" +
+                        runningVersion + "'. Use a versioned BSMP build.");
+                var compatibility = manifest.Compatibility;
+                if (!BsmpVersion.TryParse(compatibility.MinimumBsmpVersion, out var minimum))
+                    throw new InvalidDataException("The bundle minimum BSMP version is invalid.");
+                if (running.CompareTo(minimum) < 0)
+                    throw new InvalidDataException("This bundle requires BSMP " + minimum + " or later.");
+                if (!string.IsNullOrWhiteSpace(compatibility.MaximumBsmpVersionExclusive))
+                {
+                    if (!BsmpVersion.TryParse(compatibility.MaximumBsmpVersionExclusive, out var maximum))
+                        throw new InvalidDataException("The bundle maximum BSMP version is invalid.");
+                    if (running.CompareTo(maximum) >= 0)
+                        throw new InvalidDataException("This bundle is not compatible with BSMP " + running + ".");
+                }
+                return null;
+            }
             var packageMajor = ExtractMajor(packageVersion);
             var runningMajor = ExtractMajor(runningVersion);
 
@@ -77,7 +99,7 @@ namespace MissionPlanner.BSA.Config
             var path = Path.Combine(backupsDirectory, $"backup_{DateTime.UtcNow:yyyyMMdd_HHmmss}.bsampconfig");
 
             BsaConfigExporter.Export(path, liveConfig, policy, checklistJsonPath, keyPolicyJsonPath, lockPolicyJsonPathOrNull,
-                version: "auto-backup", operatorName: "BSA Import (automatic backup)",
+                version: "1.0.0", operatorName: "BSA Import (automatic backup)",
                 missionPlannerVersion: missionPlannerVersion,
                 releaseNotes: $"Automatic backup taken before importing '{sourceDescription}'.");
 
@@ -116,7 +138,10 @@ namespace MissionPlanner.BSA.Config
                 approvedValues[key] = value;
             }
 
-            return ConfigApplier.Apply(liveConfig, approvedValues);
+            var changed = ConfigApplier.Apply(liveConfig, approvedValues);
+            if (package.QuickView != null)
+                changed.AddRange(BsaQuickViewCodec.Apply(liveConfig, package.QuickView));
+            return changed;
         }
 
         /// <summary>Keys currently present in the live config that classify MachineSpecific under the

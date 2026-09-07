@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BSMP import rollback repair plan</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 920px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #17202a; }
+    code { background: #f1f3f5; padding: .1rem .3rem; border-radius: 3px; }
+    li { margin: .45rem 0; }
+  </style>
+</head>
+<body>
+  <h1>BSMP import rollback repair plan</h1>
+  <p><strong>Filename:</strong> <code>bsmp-import-rollback-plan--202609061637--v1.0.0--missing-setting-journal.html</code></p>
+  <p><strong>Status:</strong> Active. <strong>Created:</strong> 2026-09-06. <strong>Predecessor:</strong> none.</p>
+  <p>The Judicar 2600 v1.4.0 bundle contains valid QuickView fields whose desired state is absence. The importer records those removed keys as changed, then indexes the now-absent dictionary key while constructing its restart-verification journal. This raises <code>KeyNotFoundException</code> and rolls the transaction back.</p>
+  <ol>
+    <li>Extend the transaction journal to represent both expected values and expected absence.</li>
+    <li>Make apply-time journal construction use <code>TryGetValue</code>, recording removed keys without indexing them.</li>
+    <li>Verify both expected values and expected absence after restart, retaining compatibility with existing journals.</li>
+    <li>Add regression coverage for a QuickView import that removes an existing setting and for restart verification of that absence.</li>
+    <li>Run the focused tests, the wider BSA test set, Debug and Release builds, and an exact-package import check.</li>
+    <li>Commit and push the repair to the existing task branch and PR. Package a new BSMP release using the enforced single-root-folder convention. Keep the unchanged Judicar aircraft bundle separate.</li>
+  </ol>
+</body>
+</html>

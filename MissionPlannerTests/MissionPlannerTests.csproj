@@ -10,6 +10,7 @@
     <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\BSA\Plugins\Judicar2600LightsState.cs" Link="BSA\Judicar2600LightsState.cs" />
     <ProjectReference Include="..\ExtLibs\ArduPilot\MissionPlanner.ArduPilot.csproj" />
     <ProjectReference Include="..\ExtLibs\Controls\MissionPlanner.Controls.csproj" />
     <ProjectReference Include="..\ExtLibs\DroneCAN\DroneCAN.csproj" />

@@ -455,7 +455,7 @@ namespace MissionPlanner.GCSViews
                 setQuickViewRowsCols(Settings.Instance["quickViewCols"], Settings.Instance["quickViewRows"]);
             }
 
-            for (int f = 1; f < 30; f++)
+            for (int f = 1; f <= 30; f++)
             {
                 // load settings
                 if (Settings.Instance["quickView" + f] != null)

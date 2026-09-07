@@ -191,21 +191,16 @@ namespace MissionPlanner.Log
                             return;
                         }
 
-                        // find most appropriate
-                        if (hblist.GroupBy(a => a.sysid * 256 + a.compid).ToArray().Length > 1)
+                        // Prefer the flight controller heartbeat over peripheral heartbeats. The
+                        // order of heartbeats in a telemetry log is not stable, so allowing the
+                        // last one to win can file a vehicle log under ADSB or another component.
+                        var vehicleHeartbeat = SelectVehicleHeartbeat(hblist);
+                        if (vehicleHeartbeat != null)
                         {
-                            foreach (var mav in hblist)
-                            {
-                                var hb = (MAVLink.mavlink_heartbeat_t) mav.data;
-                                if (hb.type == (byte) MAVLink.MAV_TYPE.ANTENNA_TRACKER)
-                                    continue;
-                                if (hb.type == (byte) MAVLink.MAV_TYPE.GCS)
-                                    continue;
-
-                                sysid = mav.sysid;
-                                compid = mav.compid;
-                                aptype = (MAVLink.MAV_TYPE) hb.type;
-                            }
+                            var heartbeat = (MAVLink.mavlink_heartbeat_t) vehicleHeartbeat.data;
+                            sysid = vehicleHeartbeat.sysid;
+                            compid = vehicleHeartbeat.compid;
+                            aptype = (MAVLink.MAV_TYPE) heartbeat.type;
                         }
 
                         binfile.Close();
@@ -237,6 +232,37 @@ namespace MissionPlanner.Log
                     return;
                 }
             });
+        }
+
+        private static MAVLink.MAVLinkMessage SelectVehicleHeartbeat(
+            IEnumerable<MAVLink.MAVLinkMessage> heartbeats)
+        {
+            return heartbeats
+                .Where(message =>
+                {
+                    var heartbeat = (MAVLink.mavlink_heartbeat_t) message.data;
+                    var type = (MAVLink.MAV_TYPE) heartbeat.type;
+
+                    if (message.compid == (byte) MAVLink.MAV_COMPONENT.MAV_COMP_ID_ALL)
+                        return false;
+
+                    if (type == MAVLink.MAV_TYPE.ADSB ||
+                        type == MAVLink.MAV_TYPE.ANTENNA_TRACKER ||
+                        type == MAVLink.MAV_TYPE.GCS)
+                        return false;
+
+                    return message.compid == (byte) MAVLink.MAV_COMPONENT.MAV_COMP_ID_AUTOPILOT1 ||
+                           heartbeat.autopilot != (byte) MAVLink.MAV_AUTOPILOT.INVALID;
+                })
+                .OrderByDescending(message =>
+                    message.compid == (byte) MAVLink.MAV_COMPONENT.MAV_COMP_ID_AUTOPILOT1)
+                .ThenByDescending(message =>
+                    ((MAVLink.mavlink_heartbeat_t) message.data).autopilot !=
+                    (byte) MAVLink.MAV_AUTOPILOT.INVALID)
+                .ThenBy(message => message.sysid)
+                .ThenBy(message => message.compid)
+                .ThenBy(message => ((MAVLink.mavlink_heartbeat_t) message.data).type)
+                .FirstOrDefault();
         }
 
         static void MoveFileUsingMask(string logfile, string destdir)
