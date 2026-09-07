@@ -38,23 +38,28 @@ namespace MissionPlanner.BSA.Config
             };
         }
 
-        /// <summary>Major-version mismatch only - never blocks, matches the doc's "import warns on
-        /// major mismatch" mitigation for MP version drift. Null (no warning) if either version string
-        /// is missing/unparseable - absence of data is not evidence of incompatibility.</summary>
+        /// <summary>Schema 2 enforces BSMP version bounds and rejects unknown identities.
+        /// Legacy packages retain their advisory major-version check.</summary>
         static string CheckVersionCompatibility(PackageManifest manifest, string runningVersion)
         {
             var packageVersion = manifest?.MissionPlannerVersion;
             if (manifest?.SchemaVersion == BsaConfigPackage.CurrentSchemaVersion)
             {
-                if (!Version.TryParse(runningVersion, out var running))
-                    throw new InvalidDataException("The running BSMP version cannot be verified.");
+                if (!BsmpVersion.TryParse(runningVersion, out var running))
+                    throw new InvalidDataException("The running BSMP version cannot be verified: '" +
+                        runningVersion + "'. Use a versioned BSMP build.");
                 var compatibility = manifest.Compatibility;
-                var minimum = Version.Parse(compatibility.MinimumBsmpVersion);
-                if (running < minimum)
+                if (!BsmpVersion.TryParse(compatibility.MinimumBsmpVersion, out var minimum))
+                    throw new InvalidDataException("The bundle minimum BSMP version is invalid.");
+                if (running.CompareTo(minimum) < 0)
                     throw new InvalidDataException("This bundle requires BSMP " + minimum + " or later.");
-                if (!string.IsNullOrWhiteSpace(compatibility.MaximumBsmpVersionExclusive) &&
-                    running >= Version.Parse(compatibility.MaximumBsmpVersionExclusive))
-                    throw new InvalidDataException("This bundle is not compatible with BSMP " + running + ".");
+                if (!string.IsNullOrWhiteSpace(compatibility.MaximumBsmpVersionExclusive))
+                {
+                    if (!BsmpVersion.TryParse(compatibility.MaximumBsmpVersionExclusive, out var maximum))
+                        throw new InvalidDataException("The bundle maximum BSMP version is invalid.");
+                    if (running.CompareTo(maximum) >= 0)
+                        throw new InvalidDataException("This bundle is not compatible with BSMP " + running + ".");
+                }
                 return null;
             }
             var packageMajor = ExtractMajor(packageVersion);

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidatePattern('^\d+\.\d+\.\d+$')]
+    [ValidatePattern('^\d+\.\d+\.\d+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$')]
     [string]$Version,
 
     [Parameter(Mandatory = $true)]
@@ -20,6 +20,10 @@ param(
 $ErrorActionPreference = 'Stop'
 $rootName = "BSMP $Version $ReleaseDate"
 $source = (Resolve-Path $SourceDirectory).Path
+$productVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $source 'MissionPlanner.exe')).ProductVersion
+if ($productVersion -cne $Version) {
+    throw "Build ProductVersion '$productVersion' does not match release '$Version'. Build with /p:BsmpVersion=$Version."
+}
 $output = [System.IO.Path]::GetFullPath($OutputPath)
 $work = Join-Path ([System.IO.Path]::GetTempPath()) ("bsmp-release-" + [guid]::NewGuid().ToString('N'))
 $stageRoot = Join-Path $work $rootName
@@ -48,7 +52,8 @@ try {
 
     Push-Location $work
     try {
-        & $SevenZipPath a -t7z -mx=9 $archive $rootName | Out-Host
+        # Bound compression memory so packaging also works on 4 GB build VMs.
+        & $SevenZipPath a -t7z -mx=9 -md=32m -mmt=2 $archive $rootName | Out-Host
         if ($LASTEXITCODE -ne 0) {
             throw "7-Zip archive creation failed with exit code $LASTEXITCODE"
         }

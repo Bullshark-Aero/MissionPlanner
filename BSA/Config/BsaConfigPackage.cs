@@ -508,7 +508,7 @@ namespace MissionPlanner.BSA.Config
 
         static void ValidateVersion(string value, string field)
         {
-            if (string.IsNullOrWhiteSpace(value) || !Version.TryParse(value, out _))
+            if (!BsmpVersion.TryParse(value, out _))
                 throw new InvalidDataException(field + " must be a valid BSMP version.");
         }
 

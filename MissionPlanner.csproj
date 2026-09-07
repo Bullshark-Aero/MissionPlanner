@@ -1205,4 +1205,5 @@
   <ItemGroup>
     <EmbeddedResource Include="plugins\example23-switch.resx" />
   </ItemGroup>
+  <Import Project="BSA\Build\BsmpVersion.targets" />
 </Project>

@@ -84,7 +84,9 @@ namespace MissionPlanner.BSA.UI
                        $"SHA-256: {_validation.Package.PackageSha256}\n" +
                        $"Created: {m.CreatedAtUtc:u}\n" +
                        $"Created by: {m.CreatedByOperator}\n" +
-                       $"Mission Planner version: {m.MissionPlannerVersion}\n\n" +
+                       (m.SchemaVersion == BsaConfigPackage.CurrentSchemaVersion
+                           ? $"Minimum BSMP version: {m.Compatibility.MinimumBsmpVersion}\n\n"
+                           : $"Mission Planner version: {m.MissionPlannerVersion}\n\n") +
                        (string.IsNullOrWhiteSpace(m.ReleaseNotes) ? "" : m.ReleaseNotes + "\n\n") +
                        BundleSummary(_validation.Package);
 
