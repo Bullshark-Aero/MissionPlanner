@@ -5,6 +5,7 @@ extern alias Drawing;
 using GMap.NET.WindowsForms;
 using log4net;
 using MissionPlanner.ArduPilot;
+using MissionPlanner.BSA.Identity;
 using MissionPlanner.Comms;
 using MissionPlanner.Controls;
 using MissionPlanner.GCSViews.ConfigurationView;
@@ -1450,6 +1451,9 @@ namespace MissionPlanner
             }
 
             this.MenuConnect.Image = global::MissionPlanner.Properties.Resources.light_connect_icon;
+
+            if (ReferenceEquals(comPort, MainV2.comPort))
+                this.BeginInvokeIfRequired(() => this.Text = titlebar);
         }
 
         public void doConnect(MAVLinkInterface comPort, string portname, string baud, bool getparams = true, bool showui = true)
@@ -1743,7 +1747,11 @@ namespace MissionPlanner
                     Settings.Instance[_connectionControl.CMB_serialport.Text.Replace(" ","_") + "_BAUD"] =
                         _connectionControl.CMB_baudrate.Text;
 
-                    this.Text = titlebar + " " + comPort.MAV.VersionString + " on " + comPort.MAV.SerialString;
+                    this.Text = BsaTitleIdentity.BuildConnectedTitle(
+                        titlebar,
+                        comPort.MAV.VersionString,
+                        comPort.MAV.SerialString,
+                        comPort.MAV.cs.uid2);
 
                     // refresh config window if needed
                     if (MyView.current != null && showui)
