@@ -2618,6 +2618,8 @@ namespace MissionPlanner
 
             DateTime speechlowspeedtime = DateTime.Now;
 
+            var flightSpeech = new BSA.Speech.FlightSpeechService();
+
             DateTime linkqualitytime = DateTime.Now;
 
             while (serialThread)
@@ -2625,6 +2627,8 @@ namespace MissionPlanner
                 try
                 {
                     await Task.Delay(1).ConfigureAwait(false); // was 5
+
+                    flightSpeech.Tick();
 
                     try
                     {

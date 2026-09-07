@@ -33,6 +33,7 @@ namespace MissionPlanner.BSA.UI
         readonly Button _exportButton = new Button { Text = "Export MP Config" };
         readonly Button _changePassphraseButton = new Button { Text = "Change Passphrase..." };
         readonly Button _editPolicyButton = new Button { Text = "Edit Lock Policy..." };
+        readonly Button _flightSpeechButton = new Button { Text = "Flight Speech..." };
 
         public ConfigBullsharkPage()
         {
@@ -42,6 +43,7 @@ namespace MissionPlanner.BSA.UI
             _exportButton.Click += (s, e) => OnExportClicked();
             _changePassphraseButton.Click += (s, e) => OnChangePassphraseClicked();
             _editPolicyButton.Click += (s, e) => OnEditPolicyClicked();
+            _flightSpeechButton.Click += (s, e) => OnFlightSpeechClicked();
 
             var approved = BuildSection("Approved Configuration",
                 Row(_importButton,
@@ -57,7 +59,9 @@ namespace MissionPlanner.BSA.UI
                 Row(_changePassphraseButton,
                     "Set or change the Engineering passphrase used to edit the lock policy and resolve authorise class prompts."),
                 Row(_editPolicyButton,
-                    "Engineering Mode only. Edit and re-approve the operational lock policy (lock_policy.json)."));
+                    "Engineering Mode only. Edit and re-approve the operational lock policy (lock_policy.json)."),
+                Row(_flightSpeechButton,
+                    "Configure airborne QuadPlane airspeed and engine-failure announcements."));
 
             var flow = new FlowLayoutPanel
             {
@@ -93,6 +97,34 @@ namespace MissionPlanner.BSA.UI
             };
 
             return new Control[] { button, label };
+        }
+
+        void OnFlightSpeechClicked()
+        {
+            var settings = Utilities.Settings.Instance;
+            using (var dialog = new Form { Text = "Flight Speech", Width = 650, Height = 240,
+                StartPosition = FormStartPosition.CenterParent, MinimizeBox = false, MaximizeBox = false })
+            {
+                var speed = new CheckBox { Left = 16, Top = 16, Width = 600,
+                    Text = "Airspeed (m/s), number only, every 3 seconds in transition / forward flight",
+                    Checked = settings.GetBoolean("speechflightairspeedenabled") };
+                var engine = new CheckBox { Left = 16, Top = 50, Width = 600,
+                    Text = "Engine failure: airborne, RPM1 below 1000 for over 1 second; repeat 10 s",
+                    Checked = settings.GetBoolean("speechenginefailureenabled") };
+                var note = new Label { Left = 16, Top = 90, Width = 600, Height = 48,
+                    Text = "Requires global speech enabled and fresh flight-state / sensor telemetry.\nDisable legacy low-speed speech to avoid duplicate callouts. Settings travel with config exports." };
+                var save = new Button { Left = 16, Top = 148, Width = 100, Text = "Save" };
+                save.Click += (sender, args) =>
+                {
+                    if (!LockGateUi.AllowedToProceed("mp_setting_change", "flight-speech", "Changing airborne speech warnings")) return;
+                    settings["speechflightairspeedenabled"] = speed.Checked.ToString();
+                    settings["speechenginefailureenabled"] = engine.Checked.ToString();
+                    settings.Save();
+                    dialog.DialogResult = DialogResult.OK;
+                };
+                dialog.Controls.AddRange(new Control[] { speed, engine, note, save });
+                dialog.ShowDialog(this);
+            }
         }
 
         /// <summary>Section "card": a bordered Panel with a bold Label as its title, NOT a GroupBox -
