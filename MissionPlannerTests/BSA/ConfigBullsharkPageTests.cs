@@ -35,7 +35,7 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
-        public void Page_ExposesAllSixConfigActions()
+        public void Page_ExposesConfigAndFlightSpeechActions()
         {
             using (var page = new ConfigBullsharkPage())
             {
@@ -49,7 +49,8 @@ namespace MissionPlanner.BSA.Tests
                         "Compare to Package...",
                         "Export MP Config",
                         "Change Passphrase...",
-                        "Edit Lock Policy..."
+                        "Edit Lock Policy...",
+                        "Flight Speech..."
                     },
                     buttonTexts);
             }
