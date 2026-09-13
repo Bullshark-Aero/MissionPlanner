@@ -38,6 +38,38 @@ namespace MissionPlanner.BSA.Tests
         static string TempPackagePath() =>
             Path.Combine(Path.GetTempPath(), "BsaConfigExporterTests_" + Guid.NewGuid().ToString("N") + ".bsampconfig");
 
+        /// <summary>The warnings file is carried whole, outside the Portable filter - it holds no
+        /// config keys, only warning definitions bound to vehicle telemetry field names. This asserts
+        /// it survives the exporter unchanged, and that a Secret-classed key in the live config still
+        /// can't ride along with it.</summary>
+        [TestMethod]
+        public void Export_CarriesWarningsFileVerbatim()
+        {
+            const string warningsXml = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n<ArrayOfCustomWarning />";
+
+            var live = new Dictionary<string, string> { ["distunits"] = "0", ["GoogleApiKey"] = "secret" };
+            var checklistPath = TempJsonFile();
+            var keyPolicyPath = TempJsonFile();
+            var warningsPath = TempJsonFile(warningsXml);
+            var outputPath = TempPackagePath();
+            try
+            {
+                BsaConfigExporter.Export(outputPath, live, Policy(), checklistPath, keyPolicyPath, null,
+                    warningsPath, "1.0.0", "op", "1.3.80", "notes");
+
+                var read = BsaConfigPackage.Read(outputPath);
+                Assert.AreEqual(warningsXml, read.WarningsXml);
+                Assert.IsFalse(read.ConfigSubset.ContainsKey("GoogleApiKey"));
+            }
+            finally
+            {
+                File.Delete(checklistPath);
+                File.Delete(keyPolicyPath);
+                File.Delete(warningsPath);
+                if (File.Exists(outputPath)) File.Delete(outputPath);
+            }
+        }
+
         [TestMethod]
         public void Export_OnlyIncludesPortableKeys()
         {
@@ -54,7 +86,7 @@ namespace MissionPlanner.BSA.Tests
             var outputPath = TempPackagePath();
             try
             {
-                BsaConfigExporter.Export(outputPath, live, Policy(), checklistPath, keyPolicyPath, null,
+                BsaConfigExporter.Export(outputPath, live, Policy(), checklistPath, keyPolicyPath, null, null,
                     "1.0.0", "op", "1.3.80", "notes");
 
                 var read = BsaConfigPackage.Read(outputPath);
@@ -89,7 +121,7 @@ namespace MissionPlanner.BSA.Tests
             var outputPath = TempPackagePath();
             try
             {
-                BsaConfigExporter.Export(outputPath, live, Policy(), checklistPath, keyPolicyPath, null,
+                BsaConfigExporter.Export(outputPath, live, Policy(), checklistPath, keyPolicyPath, null, null,
                     "1.0.0", "op", "1.3.80", "notes");
 
                 using (var archive = ZipFile.OpenRead(outputPath))
@@ -125,7 +157,7 @@ namespace MissionPlanner.BSA.Tests
             try
             {
                 BsaConfigExporter.Export(outputPath, new Dictionary<string, string>(), Policy(),
-                    checklistPath, keyPolicyPath, null, "1.0.0", "op", "1.3.80", "");
+                    checklistPath, keyPolicyPath, null, null, "1.0.0", "op", "1.3.80", "");
                 Assert.AreEqual(0, BsaConfigPackage.Read(outputPath).ConfigSubset.Count);
             }
             finally

@@ -35,7 +35,7 @@ namespace MissionPlanner.BSA.Tests
             var checklistPath = TempJsonFile();
             var keyPolicyPath = TempJsonFile();
             var outputPath = TempPackagePath();
-            BsaConfigPackage.Write(outputPath, subset, checklistPath, keyPolicyPath, null,
+            BsaConfigPackage.Write(outputPath, subset, checklistPath, keyPolicyPath, null, null,
                 "1.0.0", "op", mpVersion, "");
             return outputPath;
         }
@@ -197,7 +197,7 @@ namespace MissionPlanner.BSA.Tests
             try
             {
                 var live = new Dictionary<string, string> { ["distunits"] = "0" };
-                var backupPath = BsaConfigImporter.Backup(backupsDir, live, Policy(), checklistPath, keyPolicyPath, null,
+                var backupPath = BsaConfigImporter.Backup(backupsDir, live, Policy(), checklistPath, keyPolicyPath, null, null,
                     "1.3.83", "test-import.bsampconfig");
 
                 Assert.IsTrue(File.Exists(backupPath));
@@ -210,6 +210,100 @@ namespace MissionPlanner.BSA.Tests
                 File.Delete(checklistPath);
                 File.Delete(keyPolicyPath);
                 if (Directory.Exists(backupsDir)) Directory.Delete(backupsDir, true);
+            }
+        }
+
+        /// <summary>An import REPLACES the machine's warning set wholesale, so the automatic pre-apply
+        /// backup is the only route back to it - the import wizard tells the operator exactly that.
+        /// If this regresses, that reassurance becomes a lie and the warnings are simply gone.</summary>
+        [TestMethod]
+        public void Backup_CarriesWarnings_SoTheyCanBeRestored()
+        {
+            const string warningsXml = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n<ArrayOfCustomWarning />";
+
+            var checklistPath = TempJsonFile();
+            var keyPolicyPath = TempJsonFile();
+            var warningsPath = TempJsonFile(warningsXml);
+            var backupsDir = Path.Combine(Path.GetTempPath(), "BsaConfigImporterTests_backups_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var live = new Dictionary<string, string> { ["distunits"] = "0" };
+                var backupPath = BsaConfigImporter.Backup(backupsDir, live, Policy(), checklistPath, keyPolicyPath,
+                    null, warningsPath, "1.3.83", "test-import.bsampconfig");
+
+                Assert.AreEqual(warningsXml, BsaConfigPackage.Read(backupPath).WarningsXml);
+            }
+            finally
+            {
+                File.Delete(checklistPath);
+                File.Delete(keyPolicyPath);
+                File.Delete(warningsPath);
+                if (Directory.Exists(backupsDir)) Directory.Delete(backupsDir, true);
+            }
+        }
+
+        /// <summary>
+        /// The import wizard used to stop at "nothing differs" whenever the key/value diff was empty,
+        /// which withheld the package's whole-file payloads from exactly the machines most likely to
+        /// need them: two laptops set up identically have no setting differences but can easily differ
+        /// in their warnings or checklist. HasInstallableFiles is what lets the wizard tell "this
+        /// package is genuinely empty" apart from "this package has nothing left to APPLY".
+        /// </summary>
+        [TestMethod]
+        public void HasInstallableFiles_TrueForAnySingleWholeFilePayload()
+        {
+            Assert.IsTrue(BsaConfigImporter.HasInstallableFiles(
+                new ConfigPackageContents { WarningsXml = "<ArrayOfCustomWarning />" }),
+                "A package carrying only warnings must still reach the install step.");
+            Assert.IsTrue(BsaConfigImporter.HasInstallableFiles(new ConfigPackageContents { ChecklistJson = "{}" }));
+            Assert.IsTrue(BsaConfigImporter.HasInstallableFiles(new ConfigPackageContents { KeyPolicyJson = "{}" }));
+            Assert.IsTrue(BsaConfigImporter.HasInstallableFiles(new ConfigPackageContents { LockPolicyJson = "{}" }));
+        }
+
+        [TestMethod]
+        public void HasInstallableFiles_FalseWhenOnlyTheConfigSubsetIsPresent()
+        {
+            var subsetOnly = new ConfigPackageContents
+            {
+                ConfigSubset = new Dictionary<string, string> { ["distunits"] = "0" }
+            };
+
+            Assert.IsFalse(BsaConfigImporter.HasInstallableFiles(subsetOnly),
+                "With no whole-file payload and an empty diff, there really is nothing to import.");
+            Assert.IsFalse(BsaConfigImporter.HasInstallableFiles(null));
+        }
+
+        /// <summary>A package read back off disk carries the files it was written with - this ties
+        /// HasInstallableFiles to the real package format rather than to hand-built objects.</summary>
+        [TestMethod]
+        public void HasInstallableFiles_TrueForARealPackage_EvenWithAnIdenticalSubset()
+        {
+            var checklistPath = TempJsonFile();
+            var keyPolicyPath = TempJsonFile();
+            var outputPath = TempPackagePath();
+            try
+            {
+                var subset = new Dictionary<string, string> { ["distunits"] = "0" };
+                BsaConfigPackage.Write(outputPath, subset, checklistPath, keyPolicyPath, null, null,
+                    "1.0.0", "op", "1.3.83", "");
+
+                var package = BsaConfigPackage.Read(outputPath);
+
+                // Live config identical to the package: nothing is applicable...
+                var applicable = 0;
+                foreach (var group in BsaConfigImporter.Diff(subset, package, Policy()))
+                    foreach (var key in group.ApplicableKeys)
+                        applicable++;
+                Assert.AreEqual(0, applicable, "Sanity: an identical config must produce an empty diff.");
+
+                // ...but the checklist and key policy are still there to install.
+                Assert.IsTrue(BsaConfigImporter.HasInstallableFiles(package));
+            }
+            finally
+            {
+                File.Delete(checklistPath);
+                File.Delete(keyPolicyPath);
+                if (File.Exists(outputPath)) File.Delete(outputPath);
             }
         }
 

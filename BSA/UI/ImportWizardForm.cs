@@ -140,10 +140,25 @@ namespace MissionPlanner.BSA.UI
 
             if (!_diffPanel.HasAnyApplicableGroup)
             {
+                // An empty key/value diff does NOT mean an empty package: the checklist, policies and
+                // warnings are whole files carried alongside the subset, and two machines configured
+                // the same way differ in exactly those. Closing here would silently withhold them.
+                if (!BsaConfigImporter.HasInstallableFiles(_validation.Package))
+                {
+                    CustomMessageBox.Show(
+                        "Nothing in this package differs from your live settings - there is nothing to import.",
+                        "Import MP Config");
+                    Close();
+                    return;
+                }
+
                 CustomMessageBox.Show(
-                    "Nothing in this package differs from your live settings - there is nothing to import.",
+                    "None of this package's settings differ from your live settings, so there is nothing to apply.\n\n" +
+                    "The package does carry BSA configuration files, which are offered next.",
                     "Import MP Config");
-                Close();
+
+                OfferBsaFileInstall();
+                ShowLocalSetupStep();
             }
         }
 
@@ -157,6 +172,9 @@ namespace MissionPlanner.BSA.UI
                         "Import MP Config", CustomMessageBox.MessageBoxButtons.YesNo) != CustomMessageBox.DialogResult.Yes)
                     return;
 
+                // Same reasoning as the empty-diff branch in ShowDiffStep: applying no settings is not
+                // a reason to withhold the package's BSA files.
+                OfferBsaFileInstall();
                 ShowLocalSetupStep();
                 return;
             }
@@ -205,9 +223,14 @@ namespace MissionPlanner.BSA.UI
         /// The package can also carry the organization's BSA config files (WP1 checklist, WP2 key
         /// policy, WP3 lock policy) - installing them is the other half of the fresh-laptop workflow
         /// (applying the mpconfig subset alone leaves BSA on the shipped defaults). Explicit
-        /// opt-in per the "never blindly overwrite" requirement; the current BSA files were already
-        /// captured in the pre-apply backup above. The lock policy installs unstamped and must be
-        /// re-approved in Engineering Mode before the lock will arm again (see BsaConfigInstaller).
+        /// opt-in per the "never blindly overwrite" requirement. The lock policy installs unstamped and
+        /// must be re-approved in Engineering Mode before the lock will arm again (see
+        /// BsaConfigInstaller).
+        ///
+        /// Reachable on three paths - after settings were applied, after the operator chose to apply
+        /// none, and when nothing differed at all - so it cannot assume the pre-apply backup already
+        /// ran. EnsureBackup below makes the backup unconditional before anything is overwritten,
+        /// which is what lets the prompt promise one.
         /// </summary>
         void OfferBsaFileInstall()
         {
@@ -216,13 +239,16 @@ namespace MissionPlanner.BSA.UI
             if (package.ChecklistJson != null) available.Add("preflight checklist");
             if (package.KeyPolicyJson != null) available.Add("config key policy");
             if (package.LockPolicyJson != null) available.Add("operational lock policy");
+            if (package.WarningsXml != null) available.Add("warning definitions");
 
             if (available.Count == 0)
                 return;
 
             var message = "This package also contains BSA configuration: " + string.Join(", ", available) + ".\n\n" +
                           "Install these onto this machine, replacing your current BSA config? " +
-                          "(Your previous BSA config was captured in the backup taken a moment ago.)";
+                          "(Your current BSA config is captured in an automatic backup first.)";
+            if (package.WarningsXml != null)
+                message += "\n\nThe package's warning definitions REPLACE this machine's existing warnings rather than adding to them; the backup holds your previous set.";
             if (package.LockPolicyJson != null)
                 message += "\n\nThe imported lock policy must be re-approved in Engineering Mode (via the lock status bar's Edit Policy button) before the operational lock will arm.";
 
@@ -230,21 +256,64 @@ namespace MissionPlanner.BSA.UI
                     CustomMessageBox.MessageBoxButtons.YesNo) != CustomMessageBox.DialogResult.Yes)
                 return;
 
+            if (!EnsureBackup())
+                return;
+
             try
             {
                 var result = BsaConfigComposition.InstallBsaFilesFromPackage(package,
                     installChecklist: package.ChecklistJson != null,
                     installKeyPolicy: package.KeyPolicyJson != null,
-                    installLockPolicy: package.LockPolicyJson != null);
+                    installLockPolicy: package.LockPolicyJson != null,
+                    installWarnings: package.WarningsXml != null);
 
-                CustomMessageBox.Show(
-                    "Installed: " + string.Join(", ", result.InstalledFiles) +
-                    ".\nRestart Mission Planner for the new BSA configuration to take effect.",
-                    "Import MP Config");
+                var installedMessage = "Installed: " + string.Join(", ", result.InstalledFiles) +
+                                       ".\nRestart Mission Planner for the new BSA configuration to take effect.";
+                // Warnings are the exception - the engine was reloaded in place, so they are live now.
+                if (result.InstalledFiles.Contains(BsaConfigInstaller.WarningsFileName))
+                    installedMessage += result.WarningsReloadError == null
+                        ? "\n\nThe imported warnings are already active - open the Warnings Manager to review them."
+                        : "\n\nThe warnings were written but could not be loaded into the running session (" +
+                          result.WarningsReloadError + "); they will take effect after the restart.";
+
+                // On the apply path the operator has already been shown where the backup went; on the
+                // two no-settings-applied paths this is their only sight of it.
+                if (_appliedKeys == null)
+                    installedMessage += "\n\nA backup of your previous config was saved to:\n" + _backupPath;
+
+                CustomMessageBox.Show(installedMessage, "Import MP Config");
             }
             catch (Exception ex)
             {
                 CustomMessageBox.Show("Could not install the BSA configuration files:\n" + ex.Message, "Import MP Config");
+            }
+        }
+
+        /// <summary>
+        /// Takes the pre-import backup if one has not been taken already, and reports whether it is now
+        /// safe to overwrite. Idempotent: on the apply path OnApplyClicked has already run it, and this
+        /// must not produce a second backup file for one import.
+        ///
+        /// Fail-closed, matching OnApplyClicked: if the backup cannot be written, nothing is installed.
+        /// Installing the BSA files is exactly as destructive as applying settings - the lock policy and
+        /// the machine's warning set are overwritten wholesale - so it gets the same guarantee.
+        /// </summary>
+        bool EnsureBackup()
+        {
+            if (_backupPath != null)
+                return true;
+
+            try
+            {
+                _backupPath = BsaConfigComposition.BackupBeforeImport(Path.GetFileName(_packagePath));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                CustomMessageBox.Show(
+                    "Could not create a backup - nothing was installed and nothing was changed:\n" + ex.Message,
+                    "Import MP Config");
+                return false;
             }
         }
 

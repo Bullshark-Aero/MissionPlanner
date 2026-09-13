@@ -22,8 +22,10 @@ namespace MissionPlanner.BSA.Config
         public string ChecklistJson { get; set; }
         public string KeyPolicyJson { get; set; }
         public string LockPolicyJson { get; set; }
+        public string WarningsXml { get; set; }
 
         public bool HasLockPolicy => LockPolicyJson != null;
+        public bool HasWarnings => WarningsXml != null;
     }
 
     /// <summary>
@@ -46,11 +48,13 @@ namespace MissionPlanner.BSA.Config
         const string LegacyChecklistEntryName = "bsa/preflight_checks.default.json";
         public const string KeyPolicyEntryName = "bsa/bsa_key_policy.json";
         public const string LockPolicyEntryName = "bsa/lock_policy.json";
+        public const string WarningsEntryName = "mpconfig/warnings.xml";
         public const string ReleaseNotesEntryName = "RELEASE_NOTES.md";
 
         /// <returns>The manifest that was written, including the computed per-entry hashes.</returns>
         public static PackageManifest Write(string outputPath, IReadOnlyDictionary<string, string> subsetConfig,
             string checklistJsonPath, string keyPolicyJsonPath, string lockPolicyJsonPathOrNull,
+            string warningsXmlPathOrNull,
             string version, string createdByOperator, string missionPlannerVersion, string releaseNotes)
         {
             if (string.IsNullOrWhiteSpace(outputPath))
@@ -68,6 +72,9 @@ namespace MissionPlanner.BSA.Config
 
             if (!string.IsNullOrEmpty(lockPolicyJsonPathOrNull) && File.Exists(lockPolicyJsonPathOrNull))
                 entries[LockPolicyEntryName] = File.ReadAllText(lockPolicyJsonPathOrNull);
+
+            if (!string.IsNullOrEmpty(warningsXmlPathOrNull) && File.Exists(warningsXmlPathOrNull))
+                entries[WarningsEntryName] = File.ReadAllText(warningsXmlPathOrNull);
 
             var manifest = new PackageManifest
             {
@@ -134,7 +141,8 @@ namespace MissionPlanner.BSA.Config
                     ChecklistJson = ReadEntryTextOrNull(archive, ChecklistEntryName)
                                     ?? ReadEntryTextOrNull(archive, LegacyChecklistEntryName),
                     KeyPolicyJson = ReadEntryTextOrNull(archive, KeyPolicyEntryName),
-                    LockPolicyJson = ReadEntryTextOrNull(archive, LockPolicyEntryName)
+                    LockPolicyJson = ReadEntryTextOrNull(archive, LockPolicyEntryName),
+                    WarningsXml = ReadEntryTextOrNull(archive, WarningsEntryName)
                 };
             }
         }

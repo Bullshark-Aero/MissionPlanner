@@ -29,7 +29,7 @@ namespace MissionPlanner.BSA.Tests
             try
             {
                 var subset = new Dictionary<string, string> { ["distunits"] = "0", ["speechenable"] = "True" };
-                var written = BsaConfigPackage.Write(outputPath, subset, checklistPath, keyPolicyPath, null,
+                var written = BsaConfigPackage.Write(outputPath, subset, checklistPath, keyPolicyPath, null, null,
                     "1.2.3", "Jane Pilot", "1.3.80", "Initial export");
 
                 Assert.AreEqual("1.2.3", written.Version);
@@ -67,7 +67,7 @@ namespace MissionPlanner.BSA.Tests
             try
             {
                 BsaConfigPackage.Write(outputPath, new Dictionary<string, string>(), checklistPath, keyPolicyPath,
-                    lockPolicyPath, "1.0.0", "op", "1.3.80", "");
+                    lockPolicyPath, null, "1.0.0", "op", "1.3.80", "");
                 var read = BsaConfigPackage.Read(outputPath);
                 Assert.IsTrue(read.HasLockPolicy);
                 Assert.AreEqual("{\"lock\":true}", read.LockPolicyJson);
@@ -81,6 +81,104 @@ namespace MissionPlanner.BSA.Tests
             }
         }
 
+        /// <summary>Warnings live in warnings.xml, not config.xml (WarningEngine), so before this entry
+        /// existed no export could carry them and no import could restore them - the reason this was
+        /// added. Carried verbatim as text, like the lock policy, and hashed into the manifest.</summary>
+        [TestMethod]
+        public void Warnings_IncludedWhenPathGiven_AndHashedInManifest()
+        {
+            const string warningsXml =
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n<ArrayOfCustomWarning />";
+
+            var checklistPath = TempJsonFile();
+            var keyPolicyPath = TempJsonFile();
+            var warningsPath = TempJsonFile(warningsXml);
+            var outputPath = TempPackagePath();
+            try
+            {
+                var written = BsaConfigPackage.Write(outputPath, new Dictionary<string, string>(), checklistPath,
+                    keyPolicyPath, null, warningsPath, "1.0.0", "op", "1.3.80", "");
+
+                Assert.IsTrue(written.FileHashes.ContainsKey(BsaConfigPackage.WarningsEntryName),
+                    "The warnings entry must be hashed in the manifest like every other entry.");
+
+                var read = BsaConfigPackage.Read(outputPath);
+                Assert.IsTrue(read.HasWarnings);
+                Assert.AreEqual(warningsXml, read.WarningsXml);
+            }
+            finally
+            {
+                File.Delete(checklistPath);
+                File.Delete(keyPolicyPath);
+                File.Delete(warningsPath);
+                if (File.Exists(outputPath)) File.Delete(outputPath);
+            }
+        }
+
+        /// <summary>A machine that never created a warning has no warnings.xml, and a package written
+        /// before this entry existed has no such entry either - both must read back cleanly as "no
+        /// warnings offered", never as an empty warning set that would wipe the target machine's.</summary>
+        [TestMethod]
+        public void Warnings_OmittedWhenPathNullOrMissing_ReadsBackAsNull()
+        {
+            var checklistPath = TempJsonFile();
+            var keyPolicyPath = TempJsonFile();
+            var outputPath = TempPackagePath();
+            try
+            {
+                BsaConfigPackage.Write(outputPath, new Dictionary<string, string>(), checklistPath, keyPolicyPath,
+                    null, null, "1.0.0", "op", "1.3.80", "");
+                var read = BsaConfigPackage.Read(outputPath);
+                Assert.IsFalse(read.HasWarnings);
+                Assert.IsNull(read.WarningsXml);
+
+                // A path that simply doesn't exist is omitted just as gracefully - never faked.
+                BsaConfigPackage.Write(outputPath, new Dictionary<string, string>(), checklistPath, keyPolicyPath,
+                    null, @"C:\does\not\exist\warnings.xml", "1.0.0", "op", "1.3.80", "");
+                Assert.IsNull(BsaConfigPackage.Read(outputPath).WarningsXml);
+            }
+            finally
+            {
+                File.Delete(checklistPath);
+                File.Delete(keyPolicyPath);
+                if (File.Exists(outputPath)) File.Delete(outputPath);
+            }
+        }
+
+        /// <summary>The warnings entry is covered by the same fail-closed integrity check as the rest -
+        /// a swapped-in warning set must not import silently.</summary>
+        [TestMethod]
+        public void TamperedWarningsEntry_FailsIntegrityCheckOnRead()
+        {
+            var checklistPath = TempJsonFile();
+            var keyPolicyPath = TempJsonFile();
+            var warningsPath = TempJsonFile("<ArrayOfCustomWarning />");
+            var outputPath = TempPackagePath();
+            try
+            {
+                BsaConfigPackage.Write(outputPath, new Dictionary<string, string>(), checklistPath, keyPolicyPath,
+                    null, warningsPath, "1.0.0", "op", "1.3.80", "");
+
+                using (var stream = new FileStream(outputPath, FileMode.Open, FileAccess.ReadWrite))
+                using (var archive = new ZipArchive(stream, ZipArchiveMode.Update))
+                {
+                    archive.GetEntry(BsaConfigPackage.WarningsEntryName).Delete();
+                    var newEntry = archive.CreateEntry(BsaConfigPackage.WarningsEntryName);
+                    using (var writer = new StreamWriter(newEntry.Open()))
+                        writer.Write("<ArrayOfCustomWarning><TAMPERED /></ArrayOfCustomWarning>");
+                }
+
+                Assert.ThrowsException<InvalidDataException>(() => BsaConfigPackage.Read(outputPath));
+            }
+            finally
+            {
+                File.Delete(checklistPath);
+                File.Delete(keyPolicyPath);
+                File.Delete(warningsPath);
+                if (File.Exists(outputPath)) File.Delete(outputPath);
+            }
+        }
+
         [TestMethod]
         public void TamperedEntry_FailsIntegrityCheckOnRead()
         {
@@ -90,7 +188,7 @@ namespace MissionPlanner.BSA.Tests
             try
             {
                 BsaConfigPackage.Write(outputPath, new Dictionary<string, string> { ["a"] = "1" },
-                    checklistPath, keyPolicyPath, null, "1.0.0", "op", "1.3.80", "");
+                    checklistPath, keyPolicyPath, null, null, "1.0.0", "op", "1.3.80", "");
 
                 // Tamper with the config subset entry directly, bypassing the manifest's recorded hash.
                 using (var stream = new FileStream(outputPath, FileMode.Open, FileAccess.ReadWrite))
@@ -122,7 +220,7 @@ namespace MissionPlanner.BSA.Tests
             {
                 Assert.ThrowsException<FileNotFoundException>(() =>
                     BsaConfigPackage.Write(outputPath, new Dictionary<string, string>(),
-                        @"C:\does\not\exist.json", keyPolicyPath, null, "1.0.0", "op", "1.3.80", ""));
+                        @"C:\does\not\exist.json", keyPolicyPath, null, null, "1.0.0", "op", "1.3.80", ""));
             }
             finally
             {

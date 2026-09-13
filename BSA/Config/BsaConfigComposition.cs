@@ -21,6 +21,7 @@ namespace MissionPlanner.BSA.Config
         const string DefaultKeyPolicyRelativePath = "BSA\\DefaultConfig\\bsa_key_policy.default.json";
         const string UserKeyPolicyFileName = "bsa_key_policy.json";
         const string LockPolicyFileName = "lock_policy.json";
+        const string WarningsFileName = "warnings.xml";
 
         /// <summary>
         /// Returns the path to the user's editable key policy, seeding it from the shipped default on
@@ -43,6 +44,12 @@ namespace MissionPlanner.BSA.Config
         static string LockPolicyPathIfPresent()
         {
             var path = Path.Combine(BsaPaths.ConfigDirectory, LockPolicyFileName);
+            return File.Exists(path) ? path : null;
+        }
+
+        static string WarningsXmlPathIfPresent()
+        {
+            var path = Path.Combine(Settings.GetUserDataDirectory(), WarningsFileName);
             return File.Exists(path) ? path : null;
         }
 
@@ -77,6 +84,7 @@ namespace MissionPlanner.BSA.Config
                 BsaPreflightComposition.ResolveChecklistPath(),
                 ResolveKeyPolicyPath(),
                 LockPolicyPathIfPresent(),
+                WarningsXmlPathIfPresent(),
                 version,
                 operatorName,
                 Application.ProductVersion,
@@ -108,6 +116,7 @@ namespace MissionPlanner.BSA.Config
                 BsaPreflightComposition.ResolveChecklistPath(),
                 ResolveKeyPolicyPath(),
                 LockPolicyPathIfPresent(),
+                WarningsXmlPathIfPresent(),
                 Application.ProductVersion,
                 sourceDescription);
         }
@@ -136,14 +145,30 @@ namespace MissionPlanner.BSA.Config
         }
 
         /// <summary>Installs the BSA config files the package carries (checklist / key policy / lock
-        /// policy) into the real BsaPaths.ConfigDirectory - the fresh-laptop workflow's other half. See
-        /// BsaConfigInstaller for the safety properties (lock policy installed unstamped, so it must be
-        /// re-approved in Engineering Mode before the lock arms).</summary>
+        /// policy) into the real BsaPaths.ConfigDirectory, plus Mission Planner's own warnings.xml into
+        /// the user data directory - the fresh-laptop workflow's other half. See BsaConfigInstaller for
+        /// the safety properties (lock policy installed unstamped, so it must be re-approved in
+        /// Engineering Mode before the lock arms).</summary>
         public static BsaInstallResult InstallBsaFilesFromPackage(ConfigPackageContents package,
-            bool installChecklist, bool installKeyPolicy, bool installLockPolicy)
+            bool installChecklist, bool installKeyPolicy, bool installLockPolicy, bool installWarnings)
         {
-            return BsaConfigInstaller.Install(package, BsaPaths.ConfigDirectory,
-                installChecklist, installKeyPolicy, installLockPolicy);
+            var result = BsaConfigInstaller.Install(package, BsaPaths.ConfigDirectory, Settings.GetUserDataDirectory(),
+                installChecklist, installKeyPolicy, installLockPolicy, installWarnings);
+
+            // The other files are read at startup and a restart is enough. warnings.xml is not.
+            if (result.InstalledFiles.Contains(BsaConfigInstaller.WarningsFileName))
+            {
+                try
+                {
+                    Warnings.WarningEngine.LoadConfig();
+                }
+                catch (Exception ex)
+                {
+                    result.WarningsReloadError = ex.Message;
+                }
+            }
+
+            return result;
         }
 
         /// <summary>Read-only view of the live config for UI display (the diff preview's before/after

@@ -65,7 +65,7 @@ namespace MissionPlanner.BSA.Tests
                 Settings.config["distunits"] = "0";
 
                 BsaConfigPackage.Write(packagePath, new Dictionary<string, string> { ["distunits"] = "0" },
-                    checklistPath, keyPolicyPath, null, "1.0.0", "op", "1.3.80", "");
+                    checklistPath, keyPolicyPath, null, null, "1.0.0", "op", "1.3.80", "");
 
                 var check = MpConfigApprovedPackageCheck.Create(Policy, () => packagePath);
                 var outcome = check.Evaluate(Check(), out var detail);
@@ -96,7 +96,7 @@ namespace MissionPlanner.BSA.Tests
                 Settings.config["distunits"] = "1"; // live differs from the package's "0"
 
                 BsaConfigPackage.Write(packagePath, new Dictionary<string, string> { ["distunits"] = "0" },
-                    checklistPath, keyPolicyPath, null, "1.0.0", "op", "1.3.80", "");
+                    checklistPath, keyPolicyPath, null, null, "1.0.0", "op", "1.3.80", "");
 
                 var check = MpConfigApprovedPackageCheck.Create(Policy, () => packagePath);
                 var outcome = check.Evaluate(Check(), out var detail);

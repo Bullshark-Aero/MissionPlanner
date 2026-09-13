@@ -66,17 +66,33 @@ namespace MissionPlanner.BSA.Config
             return ConfigDiffGrouping.Group(compareResult, policy);
         }
 
+        /// <summary>
+        /// True if the package carries any whole-file payload (checklist / key policy / lock policy /
+        /// warnings) that an import could install.
+        ///
+        /// A package has two independent halves: the mpconfig key/value subset, which the diff step
+        /// presents key by key, and these whole files, which install as a lump. They are independent -
+        /// two machines set up the same way have an empty key diff while still differing in their
+        /// warnings or checklist - so the wizard must not treat an empty key diff as "nothing to
+        /// import" and stop before offering these.
+        /// </summary>
+        public static bool HasInstallableFiles(ConfigPackageContents package) =>
+            package != null &&
+            (package.ChecklistJson != null || package.KeyPolicyJson != null ||
+             package.LockPolicyJson != null || package.WarningsXml != null);
+
         /// <summary>Exports the CURRENT live config as a timestamped backup - always call this before
         /// Apply(). "Restore Previous Config" is just a normal import pointed at one of these files.</summary>
         /// <returns>The backup file's full path.</returns>
         public static string Backup(string backupsDirectory, IReadOnlyDictionary<string, string> liveConfig,
             KeyPolicyConfig policy, string checklistJsonPath, string keyPolicyJsonPath, string lockPolicyJsonPathOrNull,
-            string missionPlannerVersion, string sourceDescription)
+            string warningsXmlPathOrNull, string missionPlannerVersion, string sourceDescription)
         {
             Directory.CreateDirectory(backupsDirectory);
             var path = Path.Combine(backupsDirectory, $"backup_{DateTime.UtcNow:yyyyMMdd_HHmmss}.bsampconfig");
 
             BsaConfigExporter.Export(path, liveConfig, policy, checklistJsonPath, keyPolicyJsonPath, lockPolicyJsonPathOrNull,
+                warningsXmlPathOrNull,
                 version: "auto-backup", operatorName: "BSA Import (automatic backup)",
                 missionPlannerVersion: missionPlannerVersion,
                 releaseNotes: $"Automatic backup taken before importing '{sourceDescription}'.");

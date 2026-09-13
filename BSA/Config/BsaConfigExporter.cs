@@ -13,6 +13,7 @@ namespace MissionPlanner.BSA.Config
     {
         public static PackageManifest Export(string outputPath, IReadOnlyDictionary<string, string> liveConfig,
             KeyPolicyConfig policy, string checklistJsonPath, string keyPolicyJsonPath, string lockPolicyJsonPathOrNull,
+            string warningsXmlPathOrNull,
             string version, string operatorName, string missionPlannerVersion, string releaseNotes)
         {
             if (liveConfig == null) throw new ArgumentNullException(nameof(liveConfig));
@@ -37,7 +38,8 @@ namespace MissionPlanner.BSA.Config
             }
 
             return BsaConfigPackage.Write(outputPath, subset, checklistJsonPath, keyPolicyJsonPath,
-                lockPolicyJsonPathOrNull, version, operatorName, missionPlannerVersion, releaseNotes);
+                lockPolicyJsonPathOrNull, warningsXmlPathOrNull,
+                version, operatorName, missionPlannerVersion, releaseNotes);
         }
     }
 }

@@ -256,6 +256,8 @@ namespace MissionPlanner.BSA.UI
                 if (sfd.ShowDialog() != DialogResult.OK)
                     return;
 
+                FlushPendingWarnings();
+
                 try
                 {
                     BsaConfigComposition.ExportNow(sfd.FileName, operatorName, version, releaseNotes);
@@ -290,6 +292,18 @@ namespace MissionPlanner.BSA.UI
                         CustomMessageBox.Show("Could not set as approved config: " + ex.Message, Strings.ERROR);
                     }
                 }
+            }
+        }
+
+        static void FlushPendingWarnings()
+        {
+            try
+            {
+                if (Warnings.WarningEngine.warnings.Count > 0)
+                    Warnings.WarningEngine.SaveConfig();
+            }
+            catch
+            {
             }
         }
 
