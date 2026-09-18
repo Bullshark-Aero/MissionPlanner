@@ -47,5 +47,5 @@ docs/
 obj2/
 obj3/
 
-/.claude/
-/CLAUDE.md
+# one developer's permission allowlist - machine-specific absolute paths, not project policy
+/.claude/settings.local.json
