@@ -86,7 +86,9 @@ namespace MissionPlanner.BSA.Config
             return result;
         }
 
-        static void EnsureParseableWarnings(string warningsXml)
+        /// <summary>Internal rather than private: the bundle transaction stages warnings.xml itself and
+        /// validates it through this same check, so both install paths reject the same bad file.</summary>
+        internal static void EnsureParseableWarnings(string warningsXml)
         {
             try
             {
