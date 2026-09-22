@@ -29,7 +29,7 @@ namespace MissionPlanner.BSA.Config
             var package = BsaConfigPackage.Read(packagePath); // throws on missing/tampered/corrupted
 
             if (!package.IsLegacy)
-                BsaPluginTrustValidator.Validate(packagePath, package, BSA.Core.BsaPaths.PluginTrustStorePath);
+                BsaPluginDescriptorValidator.Validate(packagePath, package);
 
             return new ImportValidationResult
             {
@@ -84,9 +84,6 @@ namespace MissionPlanner.BSA.Config
         }
 
         /// <summary>
-        /// True if the package carries anything beyond the key/value subset that an import could
-        /// install: a whole-file payload (checklist / key policy / lock policy / warnings) or a
-        /// schema-2 core profile.
         ///
         /// A package has two independent halves: the mpconfig key/value subset, which the diff step
         /// presents key by key, and these whole files, which install as a lump. They are independent -
@@ -110,8 +107,6 @@ namespace MissionPlanner.BSA.Config
             Directory.CreateDirectory(backupsDirectory);
             var path = Path.Combine(backupsDirectory, $"backup_{DateTime.UtcNow:yyyyMMdd_HHmmss}.bsampconfig");
 
-            // No profile argument, so this writes a schema-1 snapshot: "auto-backup" is a label, not a
-            // SemVer release, and only schema 2 requires one.
             BsaConfigExporter.Export(path, liveConfig, policy, checklistJsonPath, keyPolicyJsonPath, lockPolicyJsonPathOrNull,
                 warningsXmlPathOrNull,
                 version: "auto-backup", operatorName: "BSA Import (automatic backup)",

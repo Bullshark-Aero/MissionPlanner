@@ -84,8 +84,6 @@ namespace MissionPlanner.BSA.Tests
                 Assert.AreEqual("MAV_ESC_HOT", read.QuickView.Cells[0].SourceId);
                 Assert.AreEqual(13, read.TelemetryBindings.Bindings.Count);
                 Assert.AreEqual(3, read.HealthRules.Rules.Count);
-                // A schema-2 bundle carries warnings the same way a schema-1 one does: the Warnings
-                // Manager's own file, outside the all-or-nothing core profile.
                 Assert.IsTrue(read.HasWarnings);
             }
             finally

@@ -3226,6 +3226,8 @@ namespace MissionPlanner
                 MainMenu_ItemClicked(this, new ToolStripItemClickedEventArgs(MenuFlightData));
             }
 
+            MissionPlanner.BSA.Config.BsaConfigComposition.ShowPendingBundleNotice();
+
             // for long running tasks using own threads.
             // for short use threadpool
 

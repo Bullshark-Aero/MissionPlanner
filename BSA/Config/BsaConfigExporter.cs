@@ -11,8 +11,6 @@ namespace MissionPlanner.BSA.Config
     /// </summary>
     public static class BsaConfigExporter
     {
-        /// <summary>Whole-machine snapshot: no typed profile, so it is written as a schema-1 package.
-        /// This is what the automatic pre-import backup uses.</summary>
         public static PackageManifest Export(string outputPath, IReadOnlyDictionary<string, string> liveConfig,
             KeyPolicyConfig policy, string checklistJsonPath, string keyPolicyJsonPath, string lockPolicyJsonPathOrNull,
             string warningsXmlPathOrNull,
@@ -51,9 +49,6 @@ namespace MissionPlanner.BSA.Config
                         $"Refusing to export: key '{key}' is classified Secret and must never leave this machine.");
             }
 
-            // A typed profile means this is an engineered aircraft bundle, which is written in the
-            // schema-2 format. Without one it is a whole-machine snapshot, and those stay schema 1 so
-            // "Restore Previous Config" can import a backup straight back in.
             return profile == null
                 ? BsaConfigPackage.WriteLegacy(outputPath, subset, checklistJsonPath, keyPolicyJsonPath,
                     lockPolicyJsonPathOrNull, warningsXmlPathOrNull,

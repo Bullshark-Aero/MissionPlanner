@@ -40,8 +40,6 @@ namespace MissionPlanner.BSA.Tests
             return outputPath;
         }
 
-        /// <summary>A schema-2 bundle. The compatibility window is a schema-2 concept only - a legacy
-        /// package just warns on a major-version mismatch.</summary>
         static string WriteV2Package(IReadOnlyDictionary<string, string> subset, string mpVersion = "1.3.83")
         {
             var checklistPath = TempJsonFile();

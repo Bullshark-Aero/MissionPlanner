@@ -26,6 +26,7 @@ namespace MissionPlanner.BSA.Config
         public bool SettingsFileExisted { get; set; }
         public string InstallStatePath { get; set; }
         public Dictionary<string, string> ExpectedHashes { get; set; } = new Dictionary<string, string>();
+        public List<string> EditableTargets { get; set; } = new List<string>();
         public Dictionary<string, string> ExpectedSettings { get; set; } = new Dictionary<string, string>();
         public string Failure { get; set; }
     }
@@ -44,6 +45,7 @@ namespace MissionPlanner.BSA.Config
         public bool InstallKeyPolicy { get; set; }
         public bool InstallLockPolicy { get; set; }
         public bool InstallWarnings { get; set; }
+        public bool InstallPlugins { get; set; }
     }
 
     public class BsaBundleApplyResult
@@ -55,9 +57,20 @@ namespace MissionPlanner.BSA.Config
         public bool RestartRequired { get; set; }
         public bool NoChangesRequired { get; set; }
         public bool WarningsInstalled { get; set; }
-        /// <summary>Set by the composition root when the in-place WarningEngine reload failed; the file
-        /// is written either way, so this only decides what the operator is told.</summary>
+        public bool PluginsInstalled { get; set; }
         public string WarningsReloadError { get; set; }
+    }
+
+    public class BsaRecoveryOutcome
+    {
+        public string TransactionId { get; set; }
+        public string PackageId { get; set; }
+        public string PackageVersion { get; set; }
+        public BsaTransactionStatus Status { get; set; }
+        public string Failure { get; set; }
+        public string JournalPath { get; set; }
+        public bool RecoveryFailed { get; set; }
+        public bool RolledBack => RecoveryFailed || Status == BsaTransactionStatus.RolledBack;
     }
 
     /// <summary>Stages, snapshots, commits, and compensates every bundle-owned state change.</summary>
@@ -78,7 +91,9 @@ namespace MissionPlanner.BSA.Config
                 throw new InvalidDataException("A schema-v2 operational bundle must contain the complete core profile.");
 
             var existing = FindCommittedInstallation(package, transactionsDirectory,
-                Path.Combine(Path.GetDirectoryName(bsaConfigDirectory), "install-state.json"));
+                Path.Combine(Path.GetDirectoryName(bsaConfigDirectory), "install-state.json"), liveConfig);
+            if (existing != null && RequestedPluginsMissing(package, options, pluginDirectory))
+                existing = null;
             if (existing != null)
                 return new BsaBundleApplyResult
                 {
@@ -119,26 +134,26 @@ namespace MissionPlanner.BSA.Config
 
             var targets = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
 
-            // The health rules compute the J26_* fields at run time, and travel with the core profile -
-            // not with the warnings that watch them, which are an ordinary opt-in file.
             if (package.HealthRules != null)
                 targets[Path.Combine(bsaConfigDirectory, "active-health-rules.json")] = Utf8Json(package.HealthRules);
 
-            // The Warnings Manager's own file, replaced wholesale on opt-in. Staged like everything
-            // else so a failed restart check puts the operator's previous warning set back.
             var warningsInstalled = options?.InstallWarnings == true && package.WarningsXml != null;
             if (warningsInstalled)
             {
                 BsaConfigInstaller.EnsureParseableWarnings(package.WarningsXml);
                 targets[warningPath] = Encoding.UTF8.GetBytes(package.WarningsXml);
             }
+
+            var editableTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (warningsInstalled) editableTargets.Add(warningPath);
             AddOptionalTarget(targets, package.ChecklistJson, options?.InstallChecklist == true,
                 Path.Combine(bsaConfigDirectory, BsaConfigInstaller.ChecklistFileName));
             AddOptionalTarget(targets, package.KeyPolicyJson, options?.InstallKeyPolicy == true,
                 Path.Combine(bsaConfigDirectory, BsaConfigInstaller.KeyPolicyFileName));
             AddOptionalTarget(targets, package.LockPolicyJson, options?.InstallLockPolicy == true,
                 Path.Combine(bsaConfigDirectory, BsaConfigInstaller.LockPolicyFileName));
-            StagePluginTargets(package, targets, pluginDirectory);
+            var pluginsInstalled = options?.InstallPlugins == true && package.Plugins.Count > 0;
+            if (pluginsInstalled) StagePluginTargets(package, targets, pluginDirectory);
 
             var deleteTargets = new List<string>();
             if (options?.InstallLockPolicy == true)
@@ -164,7 +179,10 @@ namespace MissionPlanner.BSA.Config
                 journal.Files.Add(new BsaTransactionFile { TargetPath = target.Key, Existed = existed, BackupPath = backup });
                 var stagePath = Path.Combine(staged, journal.Files.Count.ToString("D3") + ".bin");
                 File.WriteAllBytes(stagePath, target.Value);
-                journal.ExpectedHashes[target.Key] = BsaHash.ComputeSha256Hex(target.Value);
+                if (editableTargets.Contains(target.Key))
+                    journal.EditableTargets.Add(target.Key);
+                else
+                    journal.ExpectedHashes[target.Key] = BsaHash.ComputeSha256Hex(target.Value);
             }
             foreach (var target in deleteTargets)
             {
@@ -188,7 +206,8 @@ namespace MissionPlanner.BSA.Config
                 WriteJournal(root, journal);
                 changed = BsaConfigImporter.Apply(liveConfig, package, approvedKeys ?? Enumerable.Empty<string>(), policy);
                 foreach (var key in changed)
-                    journal.ExpectedSettings[key] = liveConfig[key];
+                    if (liveConfig.TryGetValue(key, out var appliedValue))
+                        journal.ExpectedSettings[key] = appliedValue;
                 saveSettings();
                 checkpoint?.Invoke("settings-saved");
 
@@ -217,6 +236,7 @@ namespace MissionPlanner.BSA.Config
                     Status = journal.Status,
                     ChangedSettings = changed,
                     WarningsInstalled = warningsInstalled,
+                    PluginsInstalled = pluginsInstalled,
                     RestartRequired = true
                 };
             }
@@ -240,43 +260,85 @@ namespace MissionPlanner.BSA.Config
             }
         }
 
-        public static void RecoverAndVerify(string transactionsDirectory, IDictionary<string, string> liveConfig, Action saveSettings)
+        public static IReadOnlyList<BsaRecoveryOutcome> RecoverAndVerify(string transactionsDirectory,
+            IDictionary<string, string> liveConfig, Action saveSettings)
         {
-            if (!Directory.Exists(transactionsDirectory)) return;
-            foreach (var journalPath in Directory.GetFiles(transactionsDirectory, JournalName, SearchOption.AllDirectories))
+            var outcomes = new List<BsaRecoveryOutcome>();
+            if (!Directory.Exists(transactionsDirectory)) return outcomes;
+
+            string[] journalPaths;
+            try { journalPaths = Directory.GetFiles(transactionsDirectory, JournalName, SearchOption.AllDirectories); }
+            catch (Exception ex)
             {
-                var journal = JsonConvert.DeserializeObject<BsaTransactionJournal>(File.ReadAllText(journalPath));
-                if (journal == null) continue;
-                if (journal.Status == BsaTransactionStatus.Applying)
+                outcomes.Add(new BsaRecoveryOutcome { Failure = "Could not read the transaction folder: " + ex.Message });
+                return outcomes;
+            }
+
+            foreach (var journalPath in journalPaths)
+            {
+                BsaTransactionJournal journal = null;
+                try
                 {
-                    RestoreFiles(journal);
-                    RestoreSettings(journal, liveConfig, saveSettings);
-                    journal.Status = BsaTransactionStatus.RolledBack;
-                    journal.Failure = "Recovered an interrupted apply at startup.";
-                    WriteJournal(Path.GetDirectoryName(journalPath), journal);
-                }
-                else if (journal.Status == BsaTransactionStatus.PendingRestart)
-                {
-                    try
-                    {
-                        VerifyHashes(journal);
-                        VerifySettings(journal, liveConfig);
-                        journal.Status = BsaTransactionStatus.Verified;
-                        WriteJournal(Path.GetDirectoryName(journalPath), journal);
-                        MarkInstallStateCommitted(journal);
-                        journal.Status = BsaTransactionStatus.Committed;
-                        WriteJournal(Path.GetDirectoryName(journalPath), journal);
-                    }
-                    catch (Exception ex)
+                    journal = JsonConvert.DeserializeObject<BsaTransactionJournal>(File.ReadAllText(journalPath));
+                    if (journal == null) continue;
+                    if (journal.Status != BsaTransactionStatus.Applying && journal.Status != BsaTransactionStatus.PendingRestart)
+                        continue;
+
+                    if (journal.Status == BsaTransactionStatus.Applying)
                     {
                         RestoreFiles(journal);
                         RestoreSettings(journal, liveConfig, saveSettings);
                         journal.Status = BsaTransactionStatus.RolledBack;
-                        journal.Failure = "Startup verification failed: " + ex.Message;
+                        journal.Failure = "Recovered an interrupted apply at startup.";
                         WriteJournal(Path.GetDirectoryName(journalPath), journal);
                     }
+                    else
+                    {
+                        try
+                        {
+                            VerifyHashes(journal);
+                            VerifySettings(journal, liveConfig);
+                            journal.Status = BsaTransactionStatus.Verified;
+                            WriteJournal(Path.GetDirectoryName(journalPath), journal);
+                            MarkInstallStateCommitted(journal);
+                            journal.Status = BsaTransactionStatus.Committed;
+                            WriteJournal(Path.GetDirectoryName(journalPath), journal);
+                        }
+                        catch (Exception ex)
+                        {
+                            RestoreFiles(journal);
+                            RestoreSettings(journal, liveConfig, saveSettings);
+                            journal.Status = BsaTransactionStatus.RolledBack;
+                            journal.Failure = "Startup verification failed: " + ex.Message;
+                            WriteJournal(Path.GetDirectoryName(journalPath), journal);
+                        }
+                    }
+
+                    outcomes.Add(new BsaRecoveryOutcome
+                    {
+                        TransactionId = journal.TransactionId,
+                        PackageId = journal.PackageId,
+                        PackageVersion = journal.PackageVersion,
+                        Status = journal.Status,
+                        Failure = journal.Failure,
+                        JournalPath = journalPath
+                    });
+                }
+                catch (Exception ex)
+                {
+                    outcomes.Add(new BsaRecoveryOutcome
+                    {
+                        TransactionId = journal?.TransactionId,
+                        PackageId = journal?.PackageId,
+                        PackageVersion = journal?.PackageVersion,
+                        Status = journal?.Status ?? BsaTransactionStatus.Prepared,
+                        Failure = "Recovery could not complete: " + ex.Message,
+                        RecoveryFailed = true,
+                        JournalPath = journalPath
+                    });
                 }
             }
+            return outcomes;
         }
 
         static void RestoreSettings(BsaTransactionJournal journal, IDictionary<string, string> liveConfig, Action saveSettings)
@@ -299,6 +361,19 @@ namespace MissionPlanner.BSA.Config
             }
         }
 
+        static bool RequestedPluginsMissing(ConfigPackageContents package, BsaBundleApplyOptions options, string pluginDirectory)
+        {
+            if (options?.InstallPlugins != true) return false;
+            foreach (var plugin in package.Plugins)
+            {
+                var target = Path.Combine(pluginDirectory, plugin.PluginId + ".dll");
+                if (!File.Exists(target)) return true;
+                if (!string.Equals(BsaHash.HashFile(target), plugin.PayloadSha256, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+
         static void StagePluginTargets(ConfigPackageContents package, IDictionary<string, byte[]> targets, string pluginDirectory)
         {
             if (package.Plugins.Count == 0) return;
@@ -311,7 +386,12 @@ namespace MissionPlanner.BSA.Config
                     using (var output = new MemoryStream())
                     {
                         input.CopyTo(output);
-                        targets[Path.Combine(pluginDirectory, plugin.PluginId + ".dll")] = output.ToArray();
+                        var bytes = output.ToArray();
+                        var actual = BsaHash.ComputeSha256Hex(bytes);
+                        if (!string.Equals(actual, plugin.PayloadSha256, StringComparison.OrdinalIgnoreCase))
+                            throw new InvalidDataException(
+                                "Plugin '" + plugin.PluginId + "' does not match the payload this bundle was validated with.");
+                        targets[Path.Combine(pluginDirectory, plugin.PluginId + ".dll")] = bytes;
                     }
                 }
             }
@@ -387,7 +467,7 @@ namespace MissionPlanner.BSA.Config
         }
 
         static CommittedInstallation FindCommittedInstallation(ConfigPackageContents package,
-            string transactionsDirectory, string installStatePath)
+            string transactionsDirectory, string installStatePath, IDictionary<string, string> liveConfig)
         {
             if (string.IsNullOrWhiteSpace(package.PackageSha256) || !File.Exists(installStatePath)) return null;
             try
@@ -400,6 +480,7 @@ namespace MissionPlanner.BSA.Config
                 var journal = JsonConvert.DeserializeObject<BsaTransactionJournal>(File.ReadAllText(journalPath));
                 if (journal == null || journal.Status != BsaTransactionStatus.Committed) return null;
                 VerifyHashes(journal);
+                VerifySettings(journal, liveConfig);
                 return new CommittedInstallation { TransactionId = state.TransactionId, JournalPath = journalPath };
             }
             catch

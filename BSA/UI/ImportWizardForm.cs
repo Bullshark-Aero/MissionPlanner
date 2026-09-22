@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Windows.Forms;
 using MissionPlanner.BSA.Config;
 using MissionPlanner.Controls;
@@ -29,8 +30,6 @@ namespace MissionPlanner.BSA.UI
 
         readonly ImportValidationResult _validation;
         List<string> _appliedKeys;
-        // Two different things, deliberately: the backup is an importable package of the previous
-        // config, the transaction directory is the staged/rollback data for this import.
         string _backupPath;
         string _transactionDirectory;
         bool _restartRequired;
@@ -175,8 +174,6 @@ namespace MissionPlanner.BSA.UI
             var selected = _diffPanel.GetSelectedKeys();
             var package = _validation.Package;
 
-            // An empty selection is only "nothing to do" when the package carries nothing else either -
-            // the checklist, policies, warnings and typed profile install regardless of the key diff.
             if (selected.Count == 0 && !BsaConfigImporter.HasInstallableFiles(package))
             {
                 if (CustomMessageBox.Show(
@@ -196,9 +193,6 @@ namespace MissionPlanner.BSA.UI
                     "Import MP Config", CustomMessageBox.MessageBoxButtons.YesNo) != CustomMessageBox.DialogResult.Yes)
                 return;
 
-            // On top of the transaction's own per-file backups: those let the import roll itself back,
-            // but only this leaves the operator a package they can import later to undo it by hand.
-            // Fail-closed - if the backup cannot be written, nothing is applied.
             if (!EnsureBackup())
                 return;
 
@@ -212,7 +206,8 @@ namespace MissionPlanner.BSA.UI
                         InstallKeyPolicy = AskToInstallOptional(package.KeyPolicyJson, "configuration key policy"),
                         InstallLockPolicy = AskToInstallOptional(package.LockPolicyJson, "operational lock policy; it must be re-approved in Engineering Mode"),
                         InstallWarnings = AskToInstallOptional(package.WarningsXml,
-                            "set of warning definitions; they REPLACE this machine's existing warnings rather than adding to them")
+                            "set of warning definitions; they REPLACE this machine's existing warnings rather than adding to them"),
+                        InstallPlugins = AskToInstallPlugins(package)
                     });
                 _appliedKeys = new List<string>(applied.ChangedSettings);
                 _transactionDirectory = applied.TransactionDirectory;
@@ -231,7 +226,6 @@ namespace MissionPlanner.BSA.UI
                           $"Transaction and rollback data:\n{_transactionDirectory}\n\n" +
                           $"A backup of your previous config was saved to:\n{_backupPath}\n\n" +
                           "Restart Mission Planner to verify and commit the installation.";
-            // Warnings are the exception to "restart to take effect" - the engine is reloaded in place.
             if (applied.WarningsInstalled)
                 message += applied.WarningsReloadError == null
                     ? "\n\nThe imported warnings are already active - open the Warnings Manager to review them."
@@ -262,7 +256,9 @@ namespace MissionPlanner.BSA.UI
                 lines.Add($"  Binding: {binding.FieldId}; supported={binding.Supported}; freshness={binding.FreshnessSeconds}s");
             foreach (var health in package.HealthRules?.Rules ?? new List<BsaHealthRule>())
                 lines.Add($"  Health: {health.OutputFieldId} <= {health.Kind}; freshness={health.FreshnessSeconds}s; grace={health.ArmedGraceSeconds}s");
-            if (package.Plugins.Count == 0) lines.Add("Trust status: data-only bundle; no executable code");
+            lines.Add(package.Plugins.Count == 0
+                ? "Data-only bundle; no executable code."
+                : "Contains executable code. Plugins are unsigned - installing them is a separate, explicit choice.");
             return string.Join("\n", lines) + "\n";
         }
 
@@ -271,6 +267,22 @@ namespace MissionPlanner.BSA.UI
             return content != null && CustomMessageBox.Show(
                 "This bundle includes an optional " + description + ". Install it? The current file is included in the transaction backup.",
                 "Import MP Config", CustomMessageBox.MessageBoxButtons.YesNo) == CustomMessageBox.DialogResult.Yes;
+        }
+
+        static bool AskToInstallPlugins(ConfigPackageContents package)
+        {
+            if (package.Plugins.Count == 0) return false;
+
+            var names = string.Join("\n", package.Plugins.Select(p =>
+                "  - " + p.PluginId + (string.IsNullOrWhiteSpace(p.Version) ? "" : " " + p.Version)));
+
+            return CustomMessageBox.Show(
+                       "This bundle contains " + package.Plugins.Count + " executable plugin(s):\n\n" + names +
+                       "\n\nA plugin is program code that Mission Planner runs at start-up, with the same " +
+                       "access to the aircraft as the rest of the application. Nothing verifies who produced " +
+                       "it - install it only if you trust where this bundle came from.\n\nInstall the plugin(s)?",
+                       "Import MP Config - executable code",
+                       CustomMessageBox.MessageBoxButtons.YesNo) == CustomMessageBox.DialogResult.Yes;
         }
 
         /// <summary>

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Windows.Forms;
 using MissionPlanner.BSA.Checks;
@@ -19,7 +20,6 @@ namespace MissionPlanner.BSA.Config
     public static class BsaConfigComposition
     {
         const string DefaultKeyPolicyRelativePath = "BSA\\DefaultConfig\\bsa_key_policy.default.json";
-        const string DefaultPluginTrustStoreRelativePath = "BSA\\DefaultConfig\\plugin-trust.default.json";
         const string UserKeyPolicyFileName = "bsa_key_policy.json";
         const string LockPolicyFileName = "lock_policy.json";
         const string WarningsFileName = "warnings.xml";
@@ -98,18 +98,8 @@ namespace MissionPlanner.BSA.Config
 
         // ----- WP2 Phase B: import -----
 
-        public static string ResolvePluginTrustStorePath()
-        {
-            var shippedPath = Path.Combine(Settings.GetRunningDirectory(), DefaultPluginTrustStoreRelativePath);
-            return BsaPluginTrustStoreProvisioner.ProvisionFromShippedDefault(
-                shippedPath, BsaPaths.PluginTrustStorePath);
-        }
-
-        public static ImportValidationResult ValidateImport(string packagePath)
-        {
-            ResolvePluginTrustStorePath();
-            return BsaConfigImporter.Validate(packagePath, Application.ProductVersion);
-        }
+        public static ImportValidationResult ValidateImport(string packagePath) =>
+            BsaConfigImporter.Validate(packagePath, Application.ProductVersion);
 
         public static List<ConfigDiffGroup> DiffImport(ConfigPackageContents package)
         {
@@ -170,9 +160,6 @@ namespace MissionPlanner.BSA.Config
                 Path.Combine(Settings.GetRunningDirectory(), "plugins"), options,
                 Path.Combine(Settings.GetUserDataDirectory(), Settings.FileName));
 
-            // Everything else the bundle stages is read at startup, so the restart it already requires
-            // is enough. warnings.xml is not: the running engine holds the old list in memory and would
-            // write it back over the import on the next Warnings Manager save.
             if (result.WarningsInstalled)
             {
                 try
@@ -190,10 +177,37 @@ namespace MissionPlanner.BSA.Config
             return result;
         }
 
+        static string _pendingStartupNotice;
+
         public static void RecoverBundleTransactionsAtStartup()
         {
             _ = Settings.Instance;
-            BsaBundleTransaction.RecoverAndVerify(BsaPaths.TransactionsDirectory, Settings.config, SaveWithRetry);
+            var outcomes = BsaBundleTransaction.RecoverAndVerify(BsaPaths.TransactionsDirectory, Settings.config, SaveWithRetry);
+
+            var undone = outcomes.Where(o => o.RolledBack).ToList();
+            if (undone.Count == 0) return;
+
+            var lines = undone.Select(o =>
+                "- " + (string.IsNullOrWhiteSpace(o.PackageId) ? "configuration bundle" : o.PackageId) +
+                (string.IsNullOrWhiteSpace(o.PackageVersion) ? "" : " " + o.PackageVersion) +
+                "\n  " + o.Failure +
+                (o.RecoveryFailed
+                    ? "\n  THIS MACHINE MAY BE IN A MIXED STATE - check before flying. Journal: " + o.JournalPath
+                    : "\n  Your previous configuration has been restored."));
+
+            _pendingStartupNotice =
+                (undone.Count == 1 ? "A configuration bundle import was undone at start-up:\n\n"
+                                   : undone.Count + " configuration bundle imports were undone at start-up:\n\n") +
+                string.Join("\n\n", lines);
+        }
+
+        public static void ShowPendingBundleNotice()
+        {
+            var notice = _pendingStartupNotice;
+            _pendingStartupNotice = null;
+            if (string.IsNullOrEmpty(notice)) return;
+            try { CustomMessageBox.Show(notice, "BSA configuration bundle"); }
+            catch { /* never let a notification stop start-up */ }
         }
 
         /// <summary>Installs the BSA config files the package carries (checklist / key policy / lock

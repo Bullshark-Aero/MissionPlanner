@@ -22,9 +22,6 @@ namespace MissionPlanner.BSA.Config
         public string ChecklistJson { get; set; }
         public string KeyPolicyJson { get; set; }
         public string LockPolicyJson { get; set; }
-        // Warnings travel as the Warnings Manager's own file, in both schema 1 and schema 2 - there is
-        // no typed warning profile. Installing them replaces the machine's set wholesale, which is why
-        // it is opt-in and backed up first.
         public string WarningsXml { get; set; }
         public string ReleaseNotes { get; set; }
         public bool IsLegacy { get; set; }
@@ -84,12 +81,6 @@ namespace MissionPlanner.BSA.Config
             ["release-notes"] = ReleaseNotesEntryName
         };
 
-        /// <summary>
-        /// Writes a schema-1 package: the whole-machine snapshot the automatic pre-import backup takes.
-        /// Deliberately still the old format - a backup has no typed profile, and schema 2 refuses a
-        /// bundle without one, so writing backups as schema 2 would make them un-importable and break
-        /// "Restore Previous Config".
-        /// </summary>
         public static PackageManifest WriteLegacy(string outputPath, IReadOnlyDictionary<string, string> subsetConfig,
             string checklistJsonPath, string keyPolicyJsonPath, string lockPolicyJsonPathOrNull,
             string warningsXmlPathOrNull,
@@ -117,9 +108,6 @@ namespace MissionPlanner.BSA.Config
             foreach (var kv in entries)
                 fileHashes[kv.Key] = BsaHash.ComputeSha256Hex(kv.Value);
 
-            // Written as an explicit object rather than by serializing PackageManifest: that type now
-            // carries schema-2 members, and a "SchemaVersion": null in the JSON would route this file
-            // to the schema-2 reader, which would reject it.
             var legacyManifest = new
             {
                 Version = version,
@@ -195,9 +183,6 @@ namespace MissionPlanner.BSA.Config
             if (releaseNotes != null)
                 AddText(entries, "release-notes", "release-notes", ReleaseNotesEntryName, false, "none", releaseNotes, false);
 
-            // Optional and never part of the core profile: the warnings a bundle carries are the
-            // Warnings Manager's own file, installed wholesale on opt-in. No restart - the engine is
-            // reloaded in place once the transaction commits.
             if (!string.IsNullOrEmpty(warningsXmlPathOrNull) && File.Exists(warningsXmlPathOrNull))
                 AddText(entries, "mpconfig-warnings", "mpconfig-warnings", WarningsEntryName, false, "replace",
                     File.ReadAllText(warningsXmlPathOrNull), false);
@@ -375,8 +360,6 @@ namespace MissionPlanner.BSA.Config
                 ChecklistJson = ReadEntryTextOrNull(entries, ChecklistEntryName) ?? ReadEntryTextOrNull(entries, LegacyChecklistEntryName),
                 KeyPolicyJson = ReadEntryTextOrNull(entries, KeyPolicyEntryName),
                 LockPolicyJson = ReadEntryTextOrNull(entries, LockPolicyEntryName),
-                // Schema-1 packages written since the warning manager joined export/import carry this;
-                // dropping it here would silently lose the warnings out of every backup.
                 WarningsXml = ReadEntryTextOrNull(entries, WarningsEntryName),
                 ReleaseNotes = manifest.ReleaseNotes,
                 IsLegacy = true
@@ -456,12 +439,8 @@ namespace MissionPlanner.BSA.Config
             if (manifest.Components.Any(c =>
                     (c.Type == "quickview-layout" || c.Type == "telemetry-bindings" || c.Type == "health-rules") && !c.Required))
                 throw new InvalidDataException("Every core-profile component must be required.");
-            if (manifest.Components.Any(c => c.Type == "plugin-payload") && (manifest.Signatures == null || manifest.Signatures.Count == 0))
-                throw new InvalidDataException("Executable components require a detached BSA signature.");
             foreach (var signature in manifest.Signatures ?? new List<PackageSignature>())
             {
-                if (signature.Algorithm != "RSA-SHA256" || string.IsNullOrWhiteSpace(signature.KeyId))
-                    throw new InvalidDataException("Only identified RSA-SHA256 detached signatures are supported.");
                 ValidateEntryPath(signature.Path);
                 if (signature.ByteLength <= 0 || signature.ByteLength > 8192 || !IsLowerHexHash(signature.Sha256))
                     throw new InvalidDataException("Detached signature metadata is invalid.");
@@ -470,8 +449,6 @@ namespace MissionPlanner.BSA.Config
 
         static void ValidateTypedContents(ConfigPackageContents contents)
         {
-            // Rejected here rather than at install time: a bundle whose warnings will not parse is a
-            // bad bundle, and the operator should hear that before the wizard offers to install it.
             if (contents.WarningsXml != null)
                 BsaConfigInstaller.EnsureParseableWarnings(contents.WarningsXml);
 

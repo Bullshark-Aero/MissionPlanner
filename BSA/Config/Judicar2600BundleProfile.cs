@@ -57,9 +57,6 @@ namespace MissionPlanner.BSA.Config
                 InputFieldIds = new List<string> { "gpsstatus", "gpsstatus2" }
             });
 
-            // The warnings that watch J26_DATA_OK / J26_ESC_OK / J26_GPS_RED_OK are not built here:
-            // they travel as the bundle's warnings.xml, the Warnings Manager's own format, so the
-            // operator sees and edits them in the same place as every other warning.
             return new BsaBundleProfile
             {
                 QuickView = quickView,
