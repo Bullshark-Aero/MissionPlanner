@@ -23,6 +23,21 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
+        public void ApplicableSettingCount_CountsKeysWithAPackageValue_ExcludingLiveOnly()
+        {
+            var panel = new ImportDiffPanel();
+            Populate(panel, new List<ConfigDiffGroup>
+            {
+                Group("g1", mismatched: new[] { "guided_alt", "guided_alt_frame" }),
+                Group("g2", packageOnly: new[] { "distunits" }),
+                Group("g3", liveOnly: new[] { "comport" })
+            });
+
+            Assert.AreEqual(3, panel.ApplicableSettingCount);
+            Assert.AreEqual(0, panel.GetSelectedKeys().Count);
+        }
+
+        [TestMethod]
         public void Populate_NothingChecked_GetSelectedKeysIsEmpty()
         {
             var panel = new ImportDiffPanel();

@@ -104,19 +104,45 @@ namespace MissionPlanner.BSA.Telemetry
     {
         static JudicarHealthService _service;
 
+        public static string StartupError { get; private set; }
+
+        public static BsaHealthRuleSet LoadRules(string path)
+        {
+            var rules = JsonConvert.DeserializeObject<BsaHealthRuleSet>(File.ReadAllText(path));
+            if (rules == null) throw new InvalidDataException("The health rules file is empty.");
+            JudicarHealthEvaluator.Validate(rules);
+            return rules;
+        }
+
         public static void Initialize()
         {
             if (_service != null || !File.Exists(BsaPaths.ActiveHealthRulesPath)) return;
             try
             {
-                var rules = JsonConvert.DeserializeObject<BsaHealthRuleSet>(File.ReadAllText(BsaPaths.ActiveHealthRulesPath));
-                _service = new JudicarHealthService(rules);
+                _service = new JudicarHealthService(LoadRules(BsaPaths.ActiveHealthRulesPath));
+                StartupError = null;
             }
             catch (Exception ex)
             {
                 Trace.TraceError("BSA health service did not start: " + ex);
                 _service = null;
+                StartupError = ex.Message;
             }
+        }
+
+        public static void ShowStartupNotice()
+        {
+            if (string.IsNullOrEmpty(StartupError)) return;
+            try
+            {
+                CustomMessageBox.Show(
+                    "The Judicar health checks did not start.\n\n" +
+                    "The DATA, ESC and GPS-redundancy indicators will read NOT OK for this session, and any warning " +
+                    "on them will trigger whenever the aircraft is armed.\n\n" +
+                    "Reason: " + StartupError + "\n\nRules file: " + BsaPaths.ActiveHealthRulesPath,
+                    "BSA health checks");
+            }
+            catch { }
         }
 
         public static void Shutdown()

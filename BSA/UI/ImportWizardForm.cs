@@ -185,6 +185,15 @@ namespace MissionPlanner.BSA.UI
                 return;
             }
 
+            if (selected.Count == 0 && _diffPanel.HasAnyApplicableGroup &&
+                CustomMessageBox.Show(
+                    $"None of the {_diffPanel.ApplicableSettingCount} setting(s) that differ from this package is selected.\n\n" +
+                    "Continuing installs the package's profile and files but leaves every one of those settings as it is, " +
+                    "so this machine will not match the approved configuration.\n\n" +
+                    "Continue without applying any settings?",
+                    "Import MP Config", CustomMessageBox.MessageBoxButtons.YesNo) != CustomMessageBox.DialogResult.Yes)
+                return;
+
             var profileDescription = package.HasCompleteCoreProfile
                 ? " and the complete typed operational profile"
                 : string.Empty;

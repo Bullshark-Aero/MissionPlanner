@@ -364,6 +364,8 @@ namespace MissionPlanner.BSA.UI
 
         public bool HasAnyApplicableGroup => _rows.Any(r => r.Applicable);
 
+        public int ApplicableSettingCount => _rows.Count(r => r.Applicable);
+
         /// <summary>Operates on the currently filtered/visible rows only, not every group - so
         /// narrowing the search/status filter and then clicking Select All can't silently check hidden
         /// groups the operator never looked at. Any group with at least one visible applicable row gets

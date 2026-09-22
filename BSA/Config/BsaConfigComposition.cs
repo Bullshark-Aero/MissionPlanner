@@ -172,8 +172,11 @@ namespace MissionPlanner.BSA.Config
                 }
             }
 
-            BsaLockService.Instance.CheckAction("mp_setting_change", "configuration_bundle_import");
-            BsaLockService.Instance.Invalidate("A BSA configuration bundle was imported while the operational lock was armed.");
+            if (!result.NoChangesRequired)
+            {
+                BsaLockService.Instance.CheckAction("mp_setting_change", "configuration_bundle_import");
+                BsaLockService.Instance.Invalidate("A BSA configuration bundle was imported while the operational lock was armed.");
+            }
             return result;
         }
 
@@ -207,7 +210,7 @@ namespace MissionPlanner.BSA.Config
             _pendingStartupNotice = null;
             if (string.IsNullOrEmpty(notice)) return;
             try { CustomMessageBox.Show(notice, "BSA configuration bundle"); }
-            catch { /* never let a notification stop start-up */ }
+            catch { }
         }
 
         /// <summary>Installs the BSA config files the package carries (checklist / key policy / lock

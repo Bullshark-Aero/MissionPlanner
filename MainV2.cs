@@ -3227,6 +3227,7 @@ namespace MissionPlanner
             }
 
             MissionPlanner.BSA.Config.BsaConfigComposition.ShowPendingBundleNotice();
+            MissionPlanner.BSA.Telemetry.JudicarHealthComposition.ShowStartupNotice();
 
             // for long running tasks using own threads.
             // for short use threadpool
