@@ -28,6 +28,7 @@ namespace MissionPlanner.BSA.Config
         public Dictionary<string, string> ExpectedHashes { get; set; } = new Dictionary<string, string>();
         public List<string> EditableTargets { get; set; } = new List<string>();
         public Dictionary<string, string> ExpectedSettings { get; set; } = new Dictionary<string, string>();
+        public List<string> EditableSettings { get; set; } = new List<string>();
         public string Failure { get; set; }
     }
 
@@ -206,8 +207,12 @@ namespace MissionPlanner.BSA.Config
                 WriteJournal(root, journal);
                 changed = BsaConfigImporter.Apply(liveConfig, package, approvedKeys ?? Enumerable.Empty<string>(), policy);
                 foreach (var key in changed)
-                    if (liveConfig.TryGetValue(key, out var appliedValue))
+                {
+                    if (BsaQuickViewCodec.OwnsSetting(key))
+                        journal.EditableSettings.Add(key);
+                    else if (liveConfig.TryGetValue(key, out var appliedValue))
                         journal.ExpectedSettings[key] = appliedValue;
+                }
                 saveSettings();
                 checkpoint?.Invoke("settings-saved");
 
@@ -481,6 +486,9 @@ namespace MissionPlanner.BSA.Config
                 if (journal == null || journal.Status != BsaTransactionStatus.Committed) return null;
                 VerifyHashes(journal);
                 VerifySettings(journal, liveConfig);
+                if (package.QuickView != null &&
+                    BsaQuickViewCodec.Apply(new Dictionary<string, string>(liveConfig, StringComparer.Ordinal), package.QuickView).Count > 0)
+                    return null;
                 return new CommittedInstallation { TransactionId = state.TransactionId, JournalPath = journalPath };
             }
             catch

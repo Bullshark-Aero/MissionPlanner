@@ -329,6 +329,104 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
+        public void RestartVerification_OperatorEditedQuickPanel_StillCommits()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "BsaBundleTransactionTests_" + Guid.NewGuid().ToString("N"));
+            var bsa = Path.Combine(root, "BSA", "config");
+            var transactions = Path.Combine(root, "BSA", "transactions");
+            var warning = Path.Combine(root, "warnings.xml");
+            var settingsFile = Path.Combine(root, "config.xml");
+            Directory.CreateDirectory(bsa);
+            var live = new Dictionary<string, string> { ["distunits"] = "0" };
+            Action save = () => File.WriteAllText(settingsFile, string.Join(";", live));
+            try
+            {
+                var result = BsaBundleTransaction.Apply(Package(), live, new[] { "distunits" }, Policy(),
+                    save, warning, bsa, transactions, Path.Combine(root, "plugins"),
+                    new BsaBundleApplyOptions(), settingsFile);
+                Assert.AreEqual("ESC", live["quickView1_label"]);
+
+                live["quickView1_label"] = "ESC TEMP";
+                live["quickView1_valuecolor"] = "Red";
+                BsaBundleTransaction.RecoverAndVerify(transactions, live, save);
+
+                var journal = Newtonsoft.Json.JsonConvert.DeserializeObject<BsaTransactionJournal>(
+                    File.ReadAllText(Path.Combine(result.TransactionDirectory, "journal.json")));
+                Assert.AreEqual(BsaTransactionStatus.Committed, journal.Status, journal.Failure);
+                CollectionAssert.Contains(journal.EditableSettings, "quickView1_label");
+                Assert.IsFalse(journal.ExpectedSettings.Keys.Any(BsaQuickViewCodec.OwnsSetting));
+                Assert.IsTrue(journal.ExpectedSettings.ContainsKey("distunits"));
+                Assert.AreEqual("ESC TEMP", live["quickView1_label"]);
+                Assert.AreEqual("1", live["distunits"]);
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, true);
+            }
+        }
+
+        [TestMethod]
+        public void Reimport_AfterQuickPanelDrift_RestoresTheApprovedLayout()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "BsaBundleTransactionTests_" + Guid.NewGuid().ToString("N"));
+            var bsa = Path.Combine(root, "BSA", "config");
+            var transactions = Path.Combine(root, "BSA", "transactions");
+            var warning = Path.Combine(root, "warnings.xml");
+            var settingsFile = Path.Combine(root, "config.xml");
+            Directory.CreateDirectory(bsa);
+            var live = new Dictionary<string, string> { ["distunits"] = "0" };
+            Action save = () => File.WriteAllText(settingsFile, string.Join(";", live));
+            var package = Package();
+            try
+            {
+                BsaBundleTransaction.Apply(package, live, new[] { "distunits" }, Policy(), save, warning,
+                    bsa, transactions, Path.Combine(root, "plugins"), new BsaBundleApplyOptions(), settingsFile);
+                BsaBundleTransaction.RecoverAndVerify(transactions, live, save);
+
+                live["quickView1_label"] = "Mine";
+                var repair = BsaBundleTransaction.Apply(package, live, new[] { "distunits" }, Policy(), save, warning,
+                    bsa, transactions, Path.Combine(root, "plugins"), new BsaBundleApplyOptions(), settingsFile);
+
+                Assert.IsFalse(repair.NoChangesRequired);
+                Assert.AreEqual("ESC", live["quickView1_label"]);
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, true);
+            }
+        }
+
+        [TestMethod]
+        public void RestartRollback_StillRestoresTheQuickPanel()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "BsaBundleTransactionTests_" + Guid.NewGuid().ToString("N"));
+            var bsa = Path.Combine(root, "BSA", "config");
+            var transactions = Path.Combine(root, "BSA", "transactions");
+            var warning = Path.Combine(root, "warnings.xml");
+            var settingsFile = Path.Combine(root, "config.xml");
+            Directory.CreateDirectory(bsa);
+            var live = new Dictionary<string, string> { ["distunits"] = "0", ["quickView1_label"] = "Before" };
+            Action save = () => File.WriteAllText(settingsFile, string.Join(";", live));
+            try
+            {
+                BsaBundleTransaction.Apply(Package(), live, new[] { "distunits" }, Policy(),
+                    save, warning, bsa, transactions, Path.Combine(root, "plugins"),
+                    new BsaBundleApplyOptions(), settingsFile);
+                live["distunits"] = "2";
+
+                var outcome = BsaBundleTransaction.RecoverAndVerify(transactions, live, save).Single();
+
+                Assert.IsTrue(outcome.RolledBack);
+                Assert.AreEqual("Before", live["quickView1_label"]);
+                Assert.AreEqual("0", live["distunits"]);
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, true);
+            }
+        }
+
+        [TestMethod]
         public void Reimport_AfterSettingDrift_RepairsTheSetting()
         {
             var root = Path.Combine(Path.GetTempPath(), "BsaBundleTransactionTests_" + Guid.NewGuid().ToString("N"));
