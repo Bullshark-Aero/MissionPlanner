@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 using MissionPlanner;
+using MissionPlanner.BSA.Telemetry;
 using MissionPlanner.Controls;
 using MissionPlanner.Plugin;
 
@@ -19,9 +20,13 @@ namespace BSA.Judicar2600.MissionPlannerPlugins
         private ToolTip lightsToolTip;
         private TableLayoutPanel actionsTable;
         private int lightsRow = -1;
+        private float lightsRowHeight = 36F;
+        private bool buttonShown;
+        private readonly Judicar2600Identity identity = new Judicar2600Identity();
+        private MAVLinkInterface subscribedPort;
 
         public override string Name { get { return "Judicar 2600 Aircraft Lights"; } }
-        public override string Version { get { return "1.0.3"; } }
+        public override string Version { get { return "1.0.4"; } }
         public override string Author { get { return "BSA"; } }
 
         public override bool Init()
@@ -62,10 +67,14 @@ namespace BSA.Judicar2600.MissionPlannerPlugins
             {
                 actionsTable.RowStyles.Add(new RowStyle(SizeType.Absolute, actionRowHeight));
             }
+            lightsRowHeight = actionRowHeight;
             actionsTable.RowStyles[lightsRow].SizeType = SizeType.Absolute;
-            actionsTable.RowStyles[lightsRow].Height = actionRowHeight;
+            actionsTable.RowStyles[lightsRow].Height = 0;
+            lightsButton.Visible = false;
+            buttonShown = false;
             actionsTable.Controls.Add(lightsButton, 0, lightsRow);
             actionsTable.SetColumnSpan(lightsButton, Math.Max(1, actionsTable.ColumnCount));
+            SubscribeToCurrentPort();
             UpdateButtonFromTelemetry();
             return true;
         }
@@ -76,6 +85,8 @@ namespace BSA.Judicar2600.MissionPlannerPlugins
             {
                 return true;
             }
+
+            SubscribeToCurrentPort();
 
             if (lightsButton.InvokeRequired)
             {
@@ -91,6 +102,12 @@ namespace BSA.Judicar2600.MissionPlannerPlugins
 
         public override bool Exit()
         {
+            if (subscribedPort != null)
+            {
+                subscribedPort.OnPacketReceived -= OnPacketReceived;
+                subscribedPort = null;
+            }
+
             if (lightsButton != null)
             {
                 lightsButton.Click -= ToggleLights;
@@ -159,8 +176,52 @@ namespace BSA.Judicar2600.MissionPlannerPlugins
             return 36F;
         }
 
+        private void SubscribeToCurrentPort()
+        {
+            MAVLinkInterface port = MainV2.comPort;
+            if (ReferenceEquals(port, subscribedPort))
+            {
+                return;
+            }
+
+            if (subscribedPort != null)
+            {
+                subscribedPort.OnPacketReceived -= OnPacketReceived;
+            }
+
+            subscribedPort = port;
+            if (port != null)
+            {
+                port.OnPacketReceived += OnPacketReceived;
+            }
+        }
+
+        private void OnPacketReceived(object sender, MAVLink.MAVLinkMessage message)
+        {
+            if (message.msgid != (uint)MAVLink.MAVLINK_MSG_ID.NAMED_VALUE_FLOAT)
+            {
+                return;
+            }
+
+            MAVLink.mavlink_named_value_float_t packet = message.ToStructure<MAVLink.mavlink_named_value_float_t>();
+            string name = System.Text.Encoding.ASCII.GetString(packet.name).TrimEnd('\0');
+            identity.Record(sender, message.sysid, name);
+        }
+
+        private bool IsAircraftIdentified()
+        {
+            MAVLinkInterface port = MainV2.comPort;
+            bool open = port != null && port.BaseStream != null && port.BaseStream.IsOpen;
+            return identity.IsIdentified(port, open ? port.sysidcurrent : 0, open);
+        }
+
         private void ToggleLights(object sender, EventArgs e)
         {
+            if (!IsAircraftIdentified())
+            {
+                return;
+            }
+
             lightsButton.Enabled = false;
             try
             {
@@ -266,7 +327,23 @@ namespace BSA.Judicar2600.MissionPlannerPlugins
 
         private void UpdateButtonFromTelemetry()
         {
-            if (lightsButton == null || lightsButton.IsDisposed || !lightsButton.Enabled)
+            if (lightsButton == null || lightsButton.IsDisposed)
+            {
+                return;
+            }
+
+            bool identified = IsAircraftIdentified();
+            if (identified != buttonShown)
+            {
+                buttonShown = identified;
+                lightsButton.Visible = identified;
+                if (actionsTable != null && lightsRow >= 0 && lightsRow < actionsTable.RowStyles.Count)
+                {
+                    actionsTable.RowStyles[lightsRow].Height = identified ? lightsRowHeight : 0;
+                }
+            }
+
+            if (!identified || !lightsButton.Enabled)
             {
                 return;
             }
