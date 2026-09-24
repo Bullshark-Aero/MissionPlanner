@@ -73,12 +73,14 @@ namespace MissionPlanner.BSA.Config
             }
         }
 
-        public static PackageManifest ExportNow(string outputPath, string operatorName, string version, string releaseNotes)
+        public static PackageManifest ExportNow(string outputPath, string operatorName, string version, string releaseNotes,
+            string profileId)
         {
             _ = Settings.Instance; // ensure Settings.config has been lazy-loaded from disk
+            var option = BsaBundleProfileCatalog.Find(profileId);
             var policy = KeyPolicyLoader.Load(ResolveKeyPolicyPath());
-            var quickView = BsaQuickViewCodec.Export(Settings.config, CurrentState.custom_field_names);
-            var profile = Judicar2600BundleProfile.Create(quickView);
+            var profile = BsaBundleProfileCatalog.CreateFor(option,
+                () => BsaQuickViewCodec.Export(Settings.config, CurrentState.custom_field_names));
 
             return BsaConfigExporter.Export(
                 outputPath,
@@ -93,7 +95,7 @@ namespace MissionPlanner.BSA.Config
                 Application.ProductVersion,
                 releaseNotes,
                 profile,
-                Judicar2600BundleProfile.PackageId);
+                option.PackageId);
         }
 
         // ----- WP2 Phase B: import -----

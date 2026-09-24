@@ -258,7 +258,7 @@ namespace MissionPlanner.BSA.UI
         static string BundleSummary(ConfigPackageContents package)
         {
             if (package.IsLegacy)
-                return "Legacy settings package; no typed operational profile.\n" +
+                return "Settings package with no aircraft profile (settings, quick panel and BSA files only).\n" +
                        (package.WarningsXml != null ? "Carries warning definitions.\n" : string.Empty);
             var lines = new List<string>
             {

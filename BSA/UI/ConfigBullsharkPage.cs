@@ -232,6 +232,14 @@ namespace MissionPlanner.BSA.UI
 
         void OnExportClicked()
         {
+            BsaBundleProfileOption profile;
+            using (var choice = new BundleProfileChoiceForm(BsaBundleProfileCatalog.Options))
+            {
+                if (choice.ShowDialog(FindForm()) != DialogResult.OK || choice.SelectedOptionId == null)
+                    return;
+                profile = BsaBundleProfileCatalog.Find(choice.SelectedOptionId);
+            }
+
             string operatorName = "";
             if (InputBox.Show("Export MP Config", "Operator name:", ref operatorName) != DialogResult.OK ||
                 string.IsNullOrWhiteSpace(operatorName))
@@ -260,7 +268,7 @@ namespace MissionPlanner.BSA.UI
 
                 try
                 {
-                    BsaConfigComposition.ExportNow(sfd.FileName, operatorName, version, releaseNotes);
+                    BsaConfigComposition.ExportNow(sfd.FileName, operatorName, version, releaseNotes, profile.Id);
                 }
                 catch (Exception ex)
                 {
@@ -269,7 +277,8 @@ namespace MissionPlanner.BSA.UI
                 }
 
                 if (CustomMessageBox.Show(
-                        $"MP config exported to:\n{sfd.FileName}\n\nSet this as this machine's approved reference config?",
+                        $"MP config exported to:\n{sfd.FileName}\n\nAircraft profile: {profile.DisplayName}\n\n" +
+                        "Set this as this machine's approved reference config?",
                         "Export MP Config", CustomMessageBox.MessageBoxButtons.YesNo) == CustomMessageBox.DialogResult.Yes)
                 {
                     try
