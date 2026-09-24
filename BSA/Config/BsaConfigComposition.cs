@@ -73,8 +73,19 @@ namespace MissionPlanner.BSA.Config
             }
         }
 
+        public static List<BsaPluginExport> InstalledPluginsForExport() =>
+            BsaPluginExport.Discover(
+                Plugin.PluginLoader.Plugins.Select(p => new BsaLoadedPlugin
+                {
+                    AssemblyPath = p.GetType().Assembly.IsDynamic ? null : p.GetType().Assembly.Location,
+                    EntryType = p.GetType().FullName,
+                    Name = p.Name,
+                    Version = p.Version
+                }).ToList(),
+                Path.Combine(Settings.GetRunningDirectory(), "plugins"));
+
         public static PackageManifest ExportNow(string outputPath, string operatorName, string version, string releaseNotes,
-            string profileId)
+            string profileId, IReadOnlyList<BsaPluginExport> plugins = null)
         {
             _ = Settings.Instance; // ensure Settings.config has been lazy-loaded from disk
             var option = BsaBundleProfileCatalog.Find(profileId);
@@ -95,7 +106,8 @@ namespace MissionPlanner.BSA.Config
                 Application.ProductVersion,
                 releaseNotes,
                 profile,
-                option.PackageId);
+                option.PackageId,
+                plugins);
         }
 
         // ----- WP2 Phase B: import -----

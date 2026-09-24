@@ -12,6 +12,8 @@ namespace MissionPlanner.BSA.Config
     {
         static readonly Regex SafePluginId = new Regex(@"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", RegexOptions.CultureInvariant);
 
+        public static bool IsSafePluginId(string pluginId) => pluginId != null && SafePluginId.IsMatch(pluginId);
+
         public static void Validate(string packagePath, ConfigPackageContents package)
         {
             var payloads = package.Manifest.Components.Where(c => c.Type == "plugin-payload").ToList();

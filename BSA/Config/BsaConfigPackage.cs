@@ -152,7 +152,7 @@ namespace MissionPlanner.BSA.Config
             string checklistJsonPath, string keyPolicyJsonPath, string lockPolicyJsonPathOrNull,
             string warningsXmlPathOrNull,
             string version, string createdByOperator, string missionPlannerVersion, string releaseNotes,
-            BsaBundleProfile profile, string packageId)
+            BsaBundleProfile profile, string packageId, IReadOnlyList<BsaPluginExport> plugins = null)
         {
             if (string.IsNullOrWhiteSpace(outputPath)) throw new ArgumentException("outputPath is required.", nameof(outputPath));
             if (subsetConfig == null) throw new ArgumentNullException(nameof(subsetConfig));
@@ -186,6 +186,9 @@ namespace MissionPlanner.BSA.Config
             if (!string.IsNullOrEmpty(warningsXmlPathOrNull) && File.Exists(warningsXmlPathOrNull))
                 AddText(entries, "mpconfig-warnings", "mpconfig-warnings", WarningsEntryName, false, "replace",
                     File.ReadAllText(warningsXmlPathOrNull), false);
+
+            foreach (var plugin in plugins ?? new List<BsaPluginExport>())
+                AddPlugin(entries, plugin, missionPlannerVersion);
 
             var manifest = new PackageManifest
             {
@@ -627,6 +630,38 @@ namespace MissionPlanner.BSA.Config
                 RestartRequired = restartRequired
             }
         });
+
+        static void AddPlugin(List<PendingEntry> entries, BsaPluginExport plugin, string missionPlannerVersion)
+        {
+            if (plugin == null || !BsaPluginDescriptorValidator.IsSafePluginId(plugin.PluginId) || string.IsNullOrWhiteSpace(plugin.EntryType))
+                throw new InvalidDataException("Plugin '" + plugin?.PluginId + "' needs a safe plugin ID and an entry type to be packaged.");
+            if (string.IsNullOrWhiteSpace(plugin.DllPath) || !File.Exists(plugin.DllPath))
+                throw new FileNotFoundException("Could not find the plugin to include in the package: " + plugin.DllPath);
+            try
+            {
+                System.Reflection.AssemblyName.GetAssemblyName(plugin.DllPath);
+            }
+            catch (BadImageFormatException ex)
+            {
+                throw new InvalidDataException("Plugin '" + plugin.PluginId + "' is not a managed assembly.", ex);
+            }
+
+            var payload = File.ReadAllBytes(plugin.DllPath);
+            var payloadPath = "plugins/" + plugin.PluginId + ".dll";
+            var descriptor = new BsaPluginDescriptor
+            {
+                PluginId = plugin.PluginId,
+                Version = string.IsNullOrWhiteSpace(plugin.Version) ? "0.0.0" : plugin.Version,
+                EntryType = plugin.EntryType,
+                Compatibility = new PackageCompatibility { MinimumBsmpVersion = missionPlannerVersion },
+                PayloadPath = payloadPath,
+                PayloadSha256 = BsaHash.ComputeSha256Hex(payload),
+                RestartRequired = true
+            };
+            AddBytes(entries, "plugin-payload-" + plugin.PluginId, "plugin-payload", payloadPath, false, "stage", payload, true);
+            AddJson(entries, "plugin-descriptor-" + plugin.PluginId, "plugin-descriptor", "plugins/" + plugin.PluginId + ".json",
+                false, "stage", descriptor, true);
+        }
 
         static SortedDictionary<string, string> SortedCopy(IReadOnlyDictionary<string, string> source) =>
             new SortedDictionary<string, string>(source.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal);

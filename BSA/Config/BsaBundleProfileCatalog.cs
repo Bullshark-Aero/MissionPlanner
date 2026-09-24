@@ -34,7 +34,7 @@ namespace MissionPlanner.BSA.Config
                 Id = NoProfileId,
                 DisplayName = "No aircraft profile",
                 Description = "Settings, the quick panel and the BSA files only - no aircraft-specific telemetry " +
-                              "bindings or health rules. Use this for any other aircraft."
+                              "bindings, health rules or plugins. Use this for any other aircraft."
             }
         };
 

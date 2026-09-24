@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Windows.Forms;
 using MissionPlanner.BSA.Config;
 using MissionPlanner.BSA.Core;
@@ -240,6 +242,18 @@ namespace MissionPlanner.BSA.UI
                 profile = BsaBundleProfileCatalog.Find(choice.SelectedOptionId);
             }
 
+            var plugins = new List<BsaPluginExport>();
+            var installedPlugins = profile.CarriesProfile ? BsaConfigComposition.InstalledPluginsForExport() : new List<BsaPluginExport>();
+            if (installedPlugins.Count > 0)
+            {
+                using (var choice = new BundlePluginChoiceForm(installedPlugins))
+                {
+                    if (choice.ShowDialog(FindForm()) != DialogResult.OK)
+                        return;
+                    plugins = choice.SelectedPlugins;
+                }
+            }
+
             string operatorName = "";
             if (InputBox.Show("Export MP Config", "Operator name:", ref operatorName) != DialogResult.OK ||
                 string.IsNullOrWhiteSpace(operatorName))
@@ -268,7 +282,7 @@ namespace MissionPlanner.BSA.UI
 
                 try
                 {
-                    BsaConfigComposition.ExportNow(sfd.FileName, operatorName, version, releaseNotes, profile.Id);
+                    BsaConfigComposition.ExportNow(sfd.FileName, operatorName, version, releaseNotes, profile.Id, plugins);
                 }
                 catch (Exception ex)
                 {
@@ -277,7 +291,8 @@ namespace MissionPlanner.BSA.UI
                 }
 
                 if (CustomMessageBox.Show(
-                        $"MP config exported to:\n{sfd.FileName}\n\nAircraft profile: {profile.DisplayName}\n\n" +
+                        $"MP config exported to:\n{sfd.FileName}\n\nAircraft profile: {profile.DisplayName}\n" +
+                        $"Plugins: {(plugins.Count == 0 ? "none" : string.Join(", ", plugins.Select(p => p.DisplayName + " " + p.Version)))}\n\n" +
                         "Set this as this machine's approved reference config?",
                         "Export MP Config", CustomMessageBox.MessageBoxButtons.YesNo) == CustomMessageBox.DialogResult.Yes)
                 {
