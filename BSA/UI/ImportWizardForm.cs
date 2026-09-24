@@ -231,18 +231,28 @@ namespace MissionPlanner.BSA.UI
                 return;
             }
 
-            var message = $"Bundle staged successfully. {_appliedKeys.Count} setting(s) changed.\n\n" +
-                          $"Transaction and rollback data:\n{_transactionDirectory}\n\n" +
-                          $"A backup of your previous config was saved to:\n{_backupPath}\n\n" +
+            CustomMessageBox.Show(ResultMessage(applied, _backupPath), "Import MP Config");
+            ShowLocalSetupStep();
+        }
+
+        public static string ResultMessage(BsaBundleApplyResult applied, string backupPath)
+        {
+            if (applied.NoChangesRequired)
+                return "This bundle is already installed and verified on this machine - nothing was changed " +
+                       "and no restart is needed.\n\n" +
+                       $"Installed by transaction:\n{applied.TransactionDirectory}\n\n" +
+                       $"A backup of your current config was saved to:\n{backupPath}";
+
+            var message = $"Bundle staged successfully. {applied.ChangedSettings?.Count ?? 0} setting(s) changed.\n\n" +
+                          $"Transaction and rollback data:\n{applied.TransactionDirectory}\n\n" +
+                          $"A backup of your previous config was saved to:\n{backupPath}\n\n" +
                           "Restart Mission Planner to verify and commit the installation.";
             if (applied.WarningsInstalled)
                 message += applied.WarningsReloadError == null
                     ? "\n\nThe imported warnings are already active - open the Warnings Manager to review them."
                     : "\n\nThe warnings were written but could not be loaded into the running session (" +
                       applied.WarningsReloadError + "); they will take effect after the restart.";
-
-            CustomMessageBox.Show(message, "Import MP Config");
-            ShowLocalSetupStep();
+            return message;
         }
 
         static string BundleSummary(ConfigPackageContents package)
