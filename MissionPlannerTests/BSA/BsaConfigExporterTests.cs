@@ -70,6 +70,74 @@ namespace MissionPlanner.BSA.Tests
             }
         }
 
+        static KeyPolicyConfig PolicyWithQuickPanel()
+        {
+            var policy = Policy();
+            policy.Rules.Add(new KeyPolicyRule { Match = "quickview*", Class = KeyClass.Portable });
+            return policy;
+        }
+
+        static Dictionary<string, string> LiveWithQuickPanel() => new Dictionary<string, string>
+        {
+            ["distunits"] = "0",
+            ["quickViewRows"] = "1",
+            ["quickViewCols"] = "1",
+            ["quickView1"] = "alt",
+            ["quickView1_label"] = "ALT",
+            ["quickViewLabel_alt"] = "ALT"
+        };
+
+        [TestMethod]
+        public void Backup_KeepsQuickPanelSettings_BecauseItHasNoProfileToCarryThem()
+        {
+            var checklistPath = TempJsonFile();
+            var keyPolicyPath = TempJsonFile();
+            var backups = Path.Combine(Path.GetTempPath(), "BsaConfigExporterTests_backups_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var path = BsaConfigImporter.Backup(backups, LiveWithQuickPanel(), PolicyWithQuickPanel(),
+                    checklistPath, keyPolicyPath, null, null, "1.3.83", "a bundle");
+
+                var read = BsaConfigPackage.Read(path);
+                Assert.IsTrue(read.IsLegacy);
+                Assert.AreEqual("ALT", read.ConfigSubset["quickView1_label"]);
+                Assert.AreEqual("1", read.ConfigSubset["quickViewRows"]);
+                Assert.AreEqual("ALT", read.ConfigSubset["quickViewLabel_alt"]);
+            }
+            finally
+            {
+                File.Delete(checklistPath);
+                File.Delete(keyPolicyPath);
+                if (Directory.Exists(backups)) Directory.Delete(backups, true);
+            }
+        }
+
+        [TestMethod]
+        public void Export_WithProfile_LeavesQuickPanelSettingsToTheProfile()
+        {
+            var live = LiveWithQuickPanel();
+            var checklistPath = TempJsonFile();
+            var keyPolicyPath = TempJsonFile();
+            var outputPath = TempPackagePath();
+            try
+            {
+                var profile = Judicar2600BundleProfile.Create(BsaQuickViewCodec.Export(live, new Dictionary<string, string>()));
+                BsaConfigExporter.Export(outputPath, live, PolicyWithQuickPanel(), checklistPath, keyPolicyPath, null, null,
+                    "1.0.0", "op", "1.3.83", "notes", profile, Judicar2600BundleProfile.PackageId);
+
+                var read = BsaConfigPackage.Read(outputPath);
+                CollectionAssert.AreEquivalent(new[] { "distunits" }, new List<string>(read.ConfigSubset.Keys));
+                Assert.AreEqual("ALT", read.QuickView.Cells[0].Label);
+                Assert.AreEqual("ALT", read.QuickView.Labels["alt"]);
+            }
+            finally
+            {
+                File.Delete(checklistPath);
+                File.Delete(keyPolicyPath);
+                if (File.Exists(outputPath)) File.Delete(outputPath);
+            }
+        }
+
         [TestMethod]
         public void Export_OnlyIncludesPortableKeys()
         {

@@ -79,7 +79,7 @@ namespace MissionPlanner.BSA.Config
         public static List<ConfigDiffGroup> Diff(IReadOnlyDictionary<string, string> liveConfig,
             ConfigPackageContents package, KeyPolicyConfig policy)
         {
-            var compareResult = ConfigCompareEngine.Compare(liveConfig, package.ConfigSubset, policy);
+            var compareResult = ConfigCompareEngine.Compare(liveConfig, package, policy);
             return ConfigDiffGrouping.Group(compareResult, policy);
         }
 

@@ -33,7 +33,7 @@ namespace MissionPlanner.BSA.Config
             var subset = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var kv in liveConfig)
             {
-                if (!BsaQuickViewCodec.OwnsSetting(kv.Key) &&
+                if ((profile == null || !BsaQuickViewCodec.OwnsSetting(kv.Key)) &&
                     KeyClassifier.Classify(kv.Key, policy) == KeyClass.Portable)
                     subset[kv.Key] = kv.Value;
             }
