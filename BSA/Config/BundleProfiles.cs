@@ -8,6 +8,7 @@ namespace MissionPlanner.BSA.Config
         public int Rows { get; set; }
         public int Columns { get; set; }
         public List<BsaQuickViewCell> Cells { get; set; } = new List<BsaQuickViewCell>();
+        public Dictionary<string, string> Labels { get; set; } = new Dictionary<string, string>();
     }
 
     public class BsaQuickViewCell

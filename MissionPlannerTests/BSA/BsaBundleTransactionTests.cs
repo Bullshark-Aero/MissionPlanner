@@ -397,6 +397,45 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
+        public void Reimport_LabelMemory_RepairsDriftButKeepsTheOperatorsOwnLabels()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "BsaBundleTransactionTests_" + Guid.NewGuid().ToString("N"));
+            var bsa = Path.Combine(root, "BSA", "config");
+            var transactions = Path.Combine(root, "BSA", "transactions");
+            var warning = Path.Combine(root, "warnings.xml");
+            var settingsFile = Path.Combine(root, "config.xml");
+            Directory.CreateDirectory(bsa);
+            var live = new Dictionary<string, string> { ["distunits"] = "0" };
+            Action save = () => File.WriteAllText(settingsFile, string.Join(";", live));
+            var package = Package();
+            package.QuickView.Labels["airspeed"] = "AS";
+            try
+            {
+                var first = BsaBundleTransaction.Apply(package, live, new[] { "distunits" }, Policy(), save, warning,
+                    bsa, transactions, Path.Combine(root, "plugins"), new BsaBundleApplyOptions(), settingsFile);
+                BsaBundleTransaction.RecoverAndVerify(transactions, live, save);
+                Assert.AreEqual("AS", live["quickViewLabel_airspeed"]);
+
+                live["quickViewLabel_alt"] = "Mine";
+                var unchanged = BsaBundleTransaction.Apply(package, live, new[] { "distunits" }, Policy(), save, warning,
+                    bsa, transactions, Path.Combine(root, "plugins"), new BsaBundleApplyOptions(), settingsFile);
+                Assert.IsTrue(unchanged.NoChangesRequired, "a label for a field the bundle does not name is the operator's own");
+                Assert.AreEqual(first.TransactionId, unchanged.TransactionId);
+
+                live["quickViewLabel_airspeed"] = "Changed";
+                var repair = BsaBundleTransaction.Apply(package, live, new[] { "distunits" }, Policy(), save, warning,
+                    bsa, transactions, Path.Combine(root, "plugins"), new BsaBundleApplyOptions(), settingsFile);
+                Assert.IsFalse(repair.NoChangesRequired);
+                Assert.AreEqual("AS", live["quickViewLabel_airspeed"]);
+                Assert.AreEqual("Mine", live["quickViewLabel_alt"]);
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, true);
+            }
+        }
+
+        [TestMethod]
         public void RestartRollback_StillRestoresTheQuickPanel()
         {
             var root = Path.Combine(Path.GetTempPath(), "BsaBundleTransactionTests_" + Guid.NewGuid().ToString("N"));

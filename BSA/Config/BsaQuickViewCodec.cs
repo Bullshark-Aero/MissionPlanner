@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace MissionPlanner.BSA.Config
 {
@@ -11,6 +12,10 @@ namespace MissionPlanner.BSA.Config
     public static class BsaQuickViewCodec
     {
         const string Prefix = "quickView";
+        const string LabelMemoryPrefix = "quickViewLabel_";
+        const int MaxLabelMemoryEntries = 500;
+        const int MaxLabelLength = 100;
+        static readonly Regex SafeFieldName = new Regex("^[A-Za-z0-9_]{1,64}$");
 
         public static BsaQuickViewProfile Export(IReadOnlyDictionary<string, string> settings,
             IReadOnlyDictionary<string, string> customFieldNames)
@@ -38,6 +43,15 @@ namespace MissionPlanner.BSA.Config
                 });
             }
 
+            foreach (var entry in settings.Where(kv => kv.Key.StartsWith(LabelMemoryPrefix, StringComparison.Ordinal))
+                         .OrderBy(kv => kv.Key, StringComparer.Ordinal))
+            {
+                var field = StableLabelMemoryField(entry.Key.Substring(LabelMemoryPrefix.Length), customFieldNames);
+                if (field == null || !IsValidLabelMemory(field, entry.Value) || profile.Labels.Count >= MaxLabelMemoryEntries)
+                    continue;
+                profile.Labels[field] = entry.Value;
+            }
+
             Validate(profile);
             return profile;
         }
@@ -60,13 +74,17 @@ namespace MissionPlanner.BSA.Config
                 Set(settings, key + "_blank", (!cell.Visible).ToString(), changed);
             }
 
+            if (profile.Labels != null)
+                foreach (var label in profile.Labels.OrderBy(l => l.Key, StringComparer.Ordinal))
+                    Set(settings, LabelMemoryPrefix + label.Key, label.Value, changed);
+
             return changed;
         }
 
         public static bool OwnsSetting(string key)
         {
             if (string.IsNullOrEmpty(key)) return false;
-            if (key == "quickViewRows" || key == "quickViewCols" || key.StartsWith("quickViewLabel_", StringComparison.Ordinal))
+            if (key == "quickViewRows" || key == "quickViewCols" || key.StartsWith(LabelMemoryPrefix, StringComparison.Ordinal))
                 return true;
             if (!key.StartsWith(Prefix, StringComparison.Ordinal)) return false;
             var suffix = key.Substring(Prefix.Length);
@@ -91,6 +109,25 @@ namespace MissionPlanner.BSA.Config
                 if (cell.SourceId != null && cell.SourceId.StartsWith("customfield", StringComparison.OrdinalIgnoreCase))
                     throw new InvalidOperationException("QuickView cell " + cell.Position + " has an unstable customfield binding.");
             }
+            if (profile.Labels == null) return;
+            if (profile.Labels.Count > MaxLabelMemoryEntries)
+                throw new InvalidOperationException("QuickView label memory has more than " + MaxLabelMemoryEntries + " entries.");
+            foreach (var label in profile.Labels)
+                if (!IsValidLabelMemory(label.Key, label.Value))
+                    throw new InvalidOperationException("QuickView label memory for '" + label.Key + "' is not valid.");
+        }
+
+        static bool IsValidLabelMemory(string field, string label) =>
+            field != null && SafeFieldName.IsMatch(field) &&
+            !field.StartsWith("customfield", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(label) && label.Length <= MaxLabelLength && !label.Any(char.IsControl);
+
+        static string StableLabelMemoryField(string field, IReadOnlyDictionary<string, string> customFieldNames)
+        {
+            if (!field.StartsWith("customfield", StringComparison.OrdinalIgnoreCase)) return field;
+            return customFieldNames.TryGetValue(field, out var name) && name != null && name.StartsWith("MAV_", StringComparison.Ordinal)
+                ? name
+                : null;
         }
 
         static string StableSourceId(string source, IReadOnlyDictionary<string, string> customFieldNames)

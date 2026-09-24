@@ -69,7 +69,8 @@ namespace MissionPlanner.BSA.Tests
                 {
                     Rows = 1,
                     Columns = 1,
-                    Cells = { new BsaQuickViewCell { Position = 1, SourceId = "MAV_ESC_HOT", Label = "ESC" } }
+                    Cells = { new BsaQuickViewCell { Position = 1, SourceId = "MAV_ESC_HOT", Label = "ESC" } },
+                    Labels = { ["MAV_ESC_HOT"] = "ESC TEMP", ["airspeed"] = "AS" }
                 };
                 var warningsPath = TempJsonFile("<ArrayOfCustomWarning />");
                 var profile = Judicar2600BundleProfile.Create(quickView);
@@ -82,6 +83,8 @@ namespace MissionPlanner.BSA.Tests
                 Assert.AreEqual((int?)2, read.Manifest.SchemaVersion);
                 Assert.IsTrue(read.HasCompleteCoreProfile);
                 Assert.AreEqual("MAV_ESC_HOT", read.QuickView.Cells[0].SourceId);
+                Assert.AreEqual("ESC TEMP", read.QuickView.Labels["MAV_ESC_HOT"]);
+                Assert.AreEqual("AS", read.QuickView.Labels["airspeed"]);
                 Assert.AreEqual(13, read.TelemetryBindings.Bindings.Count);
                 Assert.AreEqual(3, read.HealthRules.Rules.Count);
                 Assert.IsTrue(read.HasWarnings);
