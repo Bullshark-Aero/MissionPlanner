@@ -21,7 +21,7 @@ namespace BSA.Judicar2600.MissionPlannerPlugins
         private int lightsRow = -1;
 
         public override string Name { get { return "Judicar 2600 Aircraft Lights"; } }
-        public override string Version { get { return "1.0.2"; } }
+        public override string Version { get { return "1.0.3"; } }
         public override string Author { get { return "BSA"; } }
 
         public override bool Init()
@@ -65,7 +65,7 @@ namespace BSA.Judicar2600.MissionPlannerPlugins
             actionsTable.RowStyles[lightsRow].SizeType = SizeType.Absolute;
             actionsTable.RowStyles[lightsRow].Height = actionRowHeight;
             actionsTable.Controls.Add(lightsButton, 0, lightsRow);
-            actionsTable.SetColumnSpan(lightsButton, 1);
+            actionsTable.SetColumnSpan(lightsButton, Math.Max(1, actionsTable.ColumnCount));
             UpdateButtonFromTelemetry();
             return true;
         }
@@ -215,9 +215,7 @@ namespace BSA.Judicar2600.MissionPlannerPlugins
                     return;
                 }
 
-                lightsButton.Text = "AIRCRAFT LIGHTS: " + targetName + " CMD";
-                lightsButton.BackColor = targetPwm == OnPwm ? Color.DarkGreen : Color.DimGray;
-                lightsButton.ForeColor = Color.White;
+                ShowState("AIRCRAFT LIGHTS: " + targetName + " CMD", targetPwm == OnPwm ? Color.DarkGreen : Color.DimGray, Color.White);
             }
             catch (Exception ex)
             {
@@ -256,6 +254,16 @@ namespace BSA.Judicar2600.MissionPlannerPlugins
             return pwm >= OnThresholdPwm;
         }
 
+        private void ShowState(string text, Color background, Color textColour)
+        {
+            lightsButton.Text = text;
+            lightsButton.BGGradTop = background;
+            lightsButton.BGGradBot = background;
+            lightsButton.Outline = background;
+            lightsButton.TextColor = textColour;
+            lightsButton.TextColorNotEnabled = textColour;
+        }
+
         private void UpdateButtonFromTelemetry()
         {
             if (lightsButton == null || lightsButton.IsDisposed || !lightsButton.Enabled)
@@ -270,21 +278,15 @@ namespace BSA.Judicar2600.MissionPlannerPlugins
 
             if (light1On && light2On)
             {
-                lightsButton.Text = "AIRCRAFT LIGHTS: ON";
-                lightsButton.BackColor = Color.DarkGreen;
-                lightsButton.ForeColor = Color.White;
+                ShowState("AIRCRAFT LIGHTS: ON", Color.DarkGreen, Color.White);
             }
             else if (!light1On && !light2On && servo15 > 0 && servo16 > 0)
             {
-                lightsButton.Text = "AIRCRAFT LIGHTS: OFF";
-                lightsButton.BackColor = Color.DimGray;
-                lightsButton.ForeColor = Color.White;
+                ShowState("AIRCRAFT LIGHTS: OFF", Color.DimGray, Color.White);
             }
             else
             {
-                lightsButton.Text = "AIRCRAFT LIGHTS: CHECK / RESTORE ON";
-                lightsButton.BackColor = Color.DarkOrange;
-                lightsButton.ForeColor = Color.Black;
+                ShowState("AIRCRAFT LIGHTS: CHECK / RESTORE ON", Color.DarkOrange, Color.Black);
             }
         }
     }
