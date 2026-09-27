@@ -29,7 +29,7 @@ namespace MissionPlanner.BSA.Tests
             try
             {
                 var subset = new Dictionary<string, string> { ["distunits"] = "0", ["speechenable"] = "True" };
-                var written = BsaConfigPackage.Write(outputPath, subset, checklistPath, keyPolicyPath, null, null,
+                var written = BsaConfigPackage.WriteLegacy(outputPath, subset, checklistPath, keyPolicyPath, null, null,
                     "1.2.3", "Jane Pilot", "1.3.80", "Initial export");
 
                 Assert.AreEqual("1.2.3", written.Version);
@@ -58,6 +58,46 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
+        public void RoundTrip_V2OperationalProfile_PreservesAllCoreComponents()
+        {
+            var checklistPath = TempJsonFile();
+            var keyPolicyPath = TempJsonFile();
+            var outputPath = TempPackagePath();
+            try
+            {
+                var quickView = new BsaQuickViewProfile
+                {
+                    Rows = 1,
+                    Columns = 1,
+                    Cells = { new BsaQuickViewCell { Position = 1, SourceId = "MAV_ESC_HOT", Label = "ESC" } },
+                    Labels = { ["MAV_ESC_HOT"] = "ESC TEMP", ["airspeed"] = "AS" }
+                };
+                var warningsPath = TempJsonFile("<ArrayOfCustomWarning />");
+                var profile = Judicar2600BundleProfile.Create(quickView);
+                BsaConfigPackage.Write(outputPath, new Dictionary<string, string>(), checklistPath, keyPolicyPath,
+                    null, warningsPath, "1.0.0", "op", "1.3.83", "first hover", profile,
+                    Judicar2600BundleProfile.PackageId);
+                File.Delete(warningsPath);
+
+                var read = BsaConfigPackage.Read(outputPath);
+                Assert.AreEqual((int?)2, read.Manifest.SchemaVersion);
+                Assert.IsTrue(read.HasCompleteCoreProfile);
+                Assert.AreEqual("MAV_ESC_HOT", read.QuickView.Cells[0].SourceId);
+                Assert.AreEqual("ESC TEMP", read.QuickView.Labels["MAV_ESC_HOT"]);
+                Assert.AreEqual("AS", read.QuickView.Labels["airspeed"]);
+                Assert.AreEqual(13, read.TelemetryBindings.Bindings.Count);
+                Assert.AreEqual(3, read.HealthRules.Rules.Count);
+                Assert.IsTrue(read.HasWarnings);
+            }
+            finally
+            {
+                File.Delete(checklistPath);
+                File.Delete(keyPolicyPath);
+                if (File.Exists(outputPath)) File.Delete(outputPath);
+            }
+        }
+
+        [TestMethod]
         public void LockPolicy_IncludedWhenPathGiven_OmittedWhenNull()
         {
             var checklistPath = TempJsonFile();
@@ -66,7 +106,7 @@ namespace MissionPlanner.BSA.Tests
             var outputPath = TempPackagePath();
             try
             {
-                BsaConfigPackage.Write(outputPath, new Dictionary<string, string>(), checklistPath, keyPolicyPath,
+                BsaConfigPackage.WriteLegacy(outputPath, new Dictionary<string, string>(), checklistPath, keyPolicyPath,
                     lockPolicyPath, null, "1.0.0", "op", "1.3.80", "");
                 var read = BsaConfigPackage.Read(outputPath);
                 Assert.IsTrue(read.HasLockPolicy);
@@ -96,7 +136,7 @@ namespace MissionPlanner.BSA.Tests
             var outputPath = TempPackagePath();
             try
             {
-                var written = BsaConfigPackage.Write(outputPath, new Dictionary<string, string>(), checklistPath,
+                var written = BsaConfigPackage.WriteLegacy(outputPath, new Dictionary<string, string>(), checklistPath,
                     keyPolicyPath, null, warningsPath, "1.0.0", "op", "1.3.80", "");
 
                 Assert.IsTrue(written.FileHashes.ContainsKey(BsaConfigPackage.WarningsEntryName),
@@ -126,14 +166,14 @@ namespace MissionPlanner.BSA.Tests
             var outputPath = TempPackagePath();
             try
             {
-                BsaConfigPackage.Write(outputPath, new Dictionary<string, string>(), checklistPath, keyPolicyPath,
+                BsaConfigPackage.WriteLegacy(outputPath, new Dictionary<string, string>(), checklistPath, keyPolicyPath,
                     null, null, "1.0.0", "op", "1.3.80", "");
                 var read = BsaConfigPackage.Read(outputPath);
                 Assert.IsFalse(read.HasWarnings);
                 Assert.IsNull(read.WarningsXml);
 
                 // A path that simply doesn't exist is omitted just as gracefully - never faked.
-                BsaConfigPackage.Write(outputPath, new Dictionary<string, string>(), checklistPath, keyPolicyPath,
+                BsaConfigPackage.WriteLegacy(outputPath, new Dictionary<string, string>(), checklistPath, keyPolicyPath,
                     null, @"C:\does\not\exist\warnings.xml", "1.0.0", "op", "1.3.80", "");
                 Assert.IsNull(BsaConfigPackage.Read(outputPath).WarningsXml);
             }
@@ -156,7 +196,7 @@ namespace MissionPlanner.BSA.Tests
             var outputPath = TempPackagePath();
             try
             {
-                BsaConfigPackage.Write(outputPath, new Dictionary<string, string>(), checklistPath, keyPolicyPath,
+                BsaConfigPackage.WriteLegacy(outputPath, new Dictionary<string, string>(), checklistPath, keyPolicyPath,
                     null, warningsPath, "1.0.0", "op", "1.3.80", "");
 
                 using (var stream = new FileStream(outputPath, FileMode.Open, FileAccess.ReadWrite))
@@ -187,7 +227,7 @@ namespace MissionPlanner.BSA.Tests
             var outputPath = TempPackagePath();
             try
             {
-                BsaConfigPackage.Write(outputPath, new Dictionary<string, string> { ["a"] = "1" },
+                BsaConfigPackage.WriteLegacy(outputPath, new Dictionary<string, string> { ["a"] = "1" },
                     checklistPath, keyPolicyPath, null, null, "1.0.0", "op", "1.3.80", "");
 
                 // Tamper with the config subset entry directly, bypassing the manifest's recorded hash.
@@ -219,7 +259,7 @@ namespace MissionPlanner.BSA.Tests
             try
             {
                 Assert.ThrowsException<FileNotFoundException>(() =>
-                    BsaConfigPackage.Write(outputPath, new Dictionary<string, string>(),
+                    BsaConfigPackage.WriteLegacy(outputPath, new Dictionary<string, string>(),
                         @"C:\does\not\exist.json", keyPolicyPath, null, null, "1.0.0", "op", "1.3.80", ""));
             }
             finally

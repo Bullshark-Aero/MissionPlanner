@@ -54,6 +54,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="APMPlannerXplanes\**" />
+    <Compile Remove="BSA\Plugins\**" />
     <Compile Remove="ExtLibs\**" />
     <Compile Remove="MissionPlannerTests\**" />
     <Compile Remove="Msi\**" />

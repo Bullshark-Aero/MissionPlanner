@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using MissionPlanner.Utilities;
 
 namespace MissionPlanner.BSA.Config
@@ -27,12 +28,24 @@ namespace MissionPlanner.BSA.Config
     public static class ConfigCompareEngine
     {
         public static ConfigCompareResult Compare(IReadOnlyDictionary<string, string> live,
-            IReadOnlyDictionary<string, string> package, KeyPolicyConfig policy)
+            ConfigPackageContents package, KeyPolicyConfig policy)
+        {
+            return Compare(live, package?.ConfigSubset, policy,
+                package?.QuickView != null ? BsaQuickViewCodec.OwnsSetting : (Func<string, bool>)null);
+        }
+
+        public static ConfigCompareResult Compare(IReadOnlyDictionary<string, string> live,
+            IReadOnlyDictionary<string, string> package, KeyPolicyConfig policy, Func<string, bool> ignoreKey = null)
         {
             if (policy == null) throw new ArgumentNullException(nameof(policy));
 
             var normalizedLive = Normalize(live, policy);
             var normalizedPackage = Normalize(package, policy);
+            if (ignoreKey != null)
+            {
+                foreach (var key in normalizedLive.Keys.Where(ignoreKey).ToList()) normalizedLive.Remove(key);
+                foreach (var key in normalizedPackage.Keys.Where(ignoreKey).ToList()) normalizedPackage.Remove(key);
+            }
 
             var result = new ConfigCompareResult();
             foreach (var kv in normalizedLive)
@@ -63,7 +76,7 @@ namespace MissionPlanner.BSA.Config
         {
             var package = BsaConfigPackage.Read(packagePath);
             _ = Settings.Instance; // Settings.config is only populated once Instance has lazy-loaded it
-            return Compare(Settings.config, package.ConfigSubset, policy);
+            return Compare(Settings.config, package, policy);
         }
 
         /// <summary>The same normalized form used for both Compare() and the report's MP-config hash

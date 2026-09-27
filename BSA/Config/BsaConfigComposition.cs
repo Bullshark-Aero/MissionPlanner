@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Windows.Forms;
 using MissionPlanner.BSA.Checks;
@@ -72,10 +73,25 @@ namespace MissionPlanner.BSA.Config
             }
         }
 
-        public static PackageManifest ExportNow(string outputPath, string operatorName, string version, string releaseNotes)
+        public static List<BsaPluginExport> InstalledPluginsForExport() =>
+            BsaPluginExport.Discover(
+                Plugin.PluginLoader.Plugins.Select(p => new BsaLoadedPlugin
+                {
+                    AssemblyPath = p.GetType().Assembly.IsDynamic ? null : p.GetType().Assembly.Location,
+                    EntryType = p.GetType().FullName,
+                    Name = p.Name,
+                    Version = p.Version
+                }).ToList(),
+                Path.Combine(Settings.GetRunningDirectory(), "plugins"));
+
+        public static PackageManifest ExportNow(string outputPath, string operatorName, string version, string releaseNotes,
+            string profileId, IReadOnlyList<BsaPluginExport> plugins = null)
         {
             _ = Settings.Instance; // ensure Settings.config has been lazy-loaded from disk
+            var option = BsaBundleProfileCatalog.Find(profileId);
             var policy = KeyPolicyLoader.Load(ResolveKeyPolicyPath());
+            var profile = BsaBundleProfileCatalog.CreateFor(option,
+                () => BsaQuickViewCodec.Export(Settings.config, CurrentState.custom_field_names));
 
             return BsaConfigExporter.Export(
                 outputPath,
@@ -88,7 +104,10 @@ namespace MissionPlanner.BSA.Config
                 version,
                 operatorName,
                 Application.ProductVersion,
-                releaseNotes);
+                releaseNotes,
+                profile,
+                option.PackageId,
+                plugins);
         }
 
         // ----- WP2 Phase B: import -----
@@ -142,6 +161,70 @@ namespace MissionPlanner.BSA.Config
             }
 
             return changed;
+        }
+
+        public static BsaBundleApplyResult ApplyBundleImport(ConfigPackageContents package,
+            IEnumerable<string> approvedKeys, BsaBundleApplyOptions options)
+        {
+            _ = Settings.Instance;
+            var policy = KeyPolicyLoader.Load(ResolveKeyPolicyPath());
+            var result = BsaBundleTransaction.Apply(package, Settings.config, approvedKeys, policy,
+                SaveWithRetry, Warnings.WarningEngine.warningconfigfile,
+                BsaPaths.ConfigDirectory, BsaPaths.TransactionsDirectory,
+                Path.Combine(Settings.GetRunningDirectory(), "plugins"), options,
+                Path.Combine(Settings.GetUserDataDirectory(), Settings.FileName));
+
+            if (result.WarningsInstalled)
+            {
+                try
+                {
+                    Warnings.WarningEngine.LoadConfig();
+                }
+                catch (Exception ex)
+                {
+                    result.WarningsReloadError = ex.Message;
+                }
+            }
+
+            if (!result.NoChangesRequired)
+            {
+                BsaLockService.Instance.CheckAction("mp_setting_change", "configuration_bundle_import");
+                BsaLockService.Instance.Invalidate("A BSA configuration bundle was imported while the operational lock was armed.");
+            }
+            return result;
+        }
+
+        static string _pendingStartupNotice;
+
+        public static void RecoverBundleTransactionsAtStartup()
+        {
+            _ = Settings.Instance;
+            var outcomes = BsaBundleTransaction.RecoverAndVerify(BsaPaths.TransactionsDirectory, Settings.config, SaveWithRetry);
+
+            var undone = outcomes.Where(o => o.RolledBack).ToList();
+            if (undone.Count == 0) return;
+
+            var lines = undone.Select(o =>
+                "- " + (string.IsNullOrWhiteSpace(o.PackageId) ? "configuration bundle" : o.PackageId) +
+                (string.IsNullOrWhiteSpace(o.PackageVersion) ? "" : " " + o.PackageVersion) +
+                "\n  " + o.Failure +
+                (o.RecoveryFailed
+                    ? "\n  THIS MACHINE MAY BE IN A MIXED STATE - check before flying. Journal: " + o.JournalPath
+                    : "\n  Your previous configuration has been restored."));
+
+            _pendingStartupNotice =
+                (undone.Count == 1 ? "A configuration bundle import was undone at start-up:\n\n"
+                                   : undone.Count + " configuration bundle imports were undone at start-up:\n\n") +
+                string.Join("\n\n", lines);
+        }
+
+        public static void ShowPendingBundleNotice()
+        {
+            var notice = _pendingStartupNotice;
+            _pendingStartupNotice = null;
+            if (string.IsNullOrEmpty(notice)) return;
+            try { CustomMessageBox.Show(notice, "BSA configuration bundle"); }
+            catch { }
         }
 
         /// <summary>Installs the BSA config files the package carries (checklist / key policy / lock

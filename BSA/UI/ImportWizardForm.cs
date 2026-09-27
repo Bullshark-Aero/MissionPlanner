@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Windows.Forms;
 using MissionPlanner.BSA.Config;
 using MissionPlanner.Controls;
@@ -30,6 +31,8 @@ namespace MissionPlanner.BSA.UI
         readonly ImportValidationResult _validation;
         List<string> _appliedKeys;
         string _backupPath;
+        string _transactionDirectory;
+        bool _restartRequired;
         Step _step;
 
         /// <param name="validation">Pre-validated by the caller (ConfigBullsharkPage) BEFORE this form
@@ -78,20 +81,27 @@ namespace MissionPlanner.BSA.UI
             var m = _validation.Package.Manifest;
 
             var text = $"Package version: {m.Version}\n" +
+                       $"Package ID: {m.PackageId}\n" +
+                       $"Schema: {(m.SchemaVersion?.ToString() ?? "legacy")}\n" +
+                       $"SHA-256: {_validation.Package.PackageSha256}\n" +
                        $"Created: {m.CreatedAtUtc:u}\n" +
                        $"Created by: {m.CreatedByOperator}\n" +
                        $"Mission Planner version: {m.MissionPlannerVersion}\n\n" +
-                       (string.IsNullOrWhiteSpace(m.ReleaseNotes) ? "" : m.ReleaseNotes + "\n\n");
+                       (string.IsNullOrWhiteSpace(m.ReleaseNotes) ? "" : m.ReleaseNotes + "\n\n") +
+                       BundleSummary(_validation.Package);
 
             if (!_validation.VersionCompatible)
                 text += "WARNING: " + _validation.VersionWarning;
 
-            var info = new Label
+            var info = new TextBox
             {
                 Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.TopLeft,
-                Padding = new Padding(16),
-                Text = text
+                Multiline = true,
+                ReadOnly = true,
+                ScrollBars = ScrollBars.Vertical,
+                BorderStyle = BorderStyle.None,
+                BackColor = SystemColors.Control,
+                Text = text.Replace("\n", Environment.NewLine)
             };
 
             _pnlContent.Controls.Clear();
@@ -138,7 +148,7 @@ namespace MissionPlanner.BSA.UI
             _lblHeader.Text = "Review changes - nothing is applied until you continue";
             _btnNext.Text = "Apply Selected >";
 
-            if (!_diffPanel.HasAnyApplicableGroup)
+            if (!_diffPanel.HasAnyApplicableGroup && !_validation.Package.HasCompleteCoreProfile)
             {
                 // An empty key/value diff does NOT mean an empty package: the checklist, policies and
                 // warnings are whole files carried alongside the subset, and two machines configured
@@ -154,139 +164,144 @@ namespace MissionPlanner.BSA.UI
 
                 CustomMessageBox.Show(
                     "None of this package's settings differ from your live settings, so there is nothing to apply.\n\n" +
-                    "The package does carry BSA configuration files, which are offered next.",
+                    "The package does carry BSA configuration files, which are offered when you continue.",
                     "Import MP Config");
-
-                OfferBsaFileInstall();
-                ShowLocalSetupStep();
             }
         }
 
         void OnApplyClicked()
         {
             var selected = _diffPanel.GetSelectedKeys();
-            if (selected.Count == 0)
+            var package = _validation.Package;
+
+            if (selected.Count == 0 && !BsaConfigImporter.HasInstallableFiles(package))
             {
                 if (CustomMessageBox.Show(
                         "No settings are selected - nothing will be applied. Continue anyway?",
                         "Import MP Config", CustomMessageBox.MessageBoxButtons.YesNo) != CustomMessageBox.DialogResult.Yes)
                     return;
 
-                // Same reasoning as the empty-diff branch in ShowDiffStep: applying no settings is not
-                // a reason to withhold the package's BSA files.
-                OfferBsaFileInstall();
                 ShowLocalSetupStep();
                 return;
             }
 
-            if (CustomMessageBox.Show(
-                    $"This will back up your current config, then apply {selected.Count} setting(s). Continue?",
+            if (selected.Count == 0 && _diffPanel.HasAnyApplicableGroup &&
+                CustomMessageBox.Show(
+                    $"None of the {_diffPanel.ApplicableSettingCount} setting(s) that differ from this package is selected.\n\n" +
+                    "Continuing installs the package's profile and files but leaves every one of those settings as it is, " +
+                    "so this machine will not match the approved configuration.\n\n" +
+                    "Continue without applying any settings?",
                     "Import MP Config", CustomMessageBox.MessageBoxButtons.YesNo) != CustomMessageBox.DialogResult.Yes)
                 return;
 
-            // Backup must succeed before anything is applied - never skippable, per the source
-            // document's "import creates a backup" requirement.
-            try
-            {
-                _backupPath = BsaConfigComposition.BackupBeforeImport(Path.GetFileName(_packagePath));
-            }
-            catch (Exception ex)
-            {
-                CustomMessageBox.Show(
-                    "Could not create a backup - import aborted, nothing was changed:\n" + ex.Message,
-                    "Import MP Config");
-                return;
-            }
-
-            try
-            {
-                _appliedKeys = BsaConfigComposition.ApplyImport(_validation.Package, selected);
-            }
-            catch (Exception ex)
-            {
-                CustomMessageBox.Show(
-                    $"Import failed while applying settings:\n{ex.Message}\n\nA backup of your PREVIOUS config was saved to:\n{_backupPath}",
-                    "Import MP Config");
-                Close();
-                return;
-            }
-
-            CustomMessageBox.Show(
-                $"{_appliedKeys.Count} setting(s) applied.\n\nA backup of your previous config was saved to:\n{_backupPath}",
-                "Import MP Config");
-
-            OfferBsaFileInstall();
-            ShowLocalSetupStep();
-        }
-
-        /// <summary>
-        /// The package can also carry the organization's BSA config files (WP1 checklist, WP2 key
-        /// policy, WP3 lock policy) - installing them is the other half of the fresh-laptop workflow
-        /// (applying the mpconfig subset alone leaves BSA on the shipped defaults). Explicit
-        /// opt-in per the "never blindly overwrite" requirement. The lock policy installs unstamped and
-        /// must be re-approved in Engineering Mode before the lock will arm again (see
-        /// BsaConfigInstaller).
-        ///
-        /// Reachable on three paths - after settings were applied, after the operator chose to apply
-        /// none, and when nothing differed at all - so it cannot assume the pre-apply backup already
-        /// ran. EnsureBackup below makes the backup unconditional before anything is overwritten,
-        /// which is what lets the prompt promise one.
-        /// </summary>
-        void OfferBsaFileInstall()
-        {
-            var package = _validation.Package;
-            var available = new List<string>();
-            if (package.ChecklistJson != null) available.Add("preflight checklist");
-            if (package.KeyPolicyJson != null) available.Add("config key policy");
-            if (package.LockPolicyJson != null) available.Add("operational lock policy");
-            if (package.WarningsXml != null) available.Add("warning definitions");
-
-            if (available.Count == 0)
-                return;
-
-            var message = "This package also contains BSA configuration: " + string.Join(", ", available) + ".\n\n" +
-                          "Install these onto this machine, replacing your current BSA config? " +
-                          "(Your current BSA config is captured in an automatic backup first.)";
-            if (package.WarningsXml != null)
-                message += "\n\nThe package's warning definitions REPLACE this machine's existing warnings rather than adding to them; the backup holds your previous set.";
-            if (package.LockPolicyJson != null)
-                message += "\n\nThe imported lock policy must be re-approved in Engineering Mode (via the lock status bar's Edit Policy button) before the operational lock will arm.";
-
-            if (CustomMessageBox.Show(message, "Import MP Config",
-                    CustomMessageBox.MessageBoxButtons.YesNo) != CustomMessageBox.DialogResult.Yes)
+            var profileDescription = package.HasCompleteCoreProfile
+                ? " and the complete typed operational profile"
+                : string.Empty;
+            if (CustomMessageBox.Show(
+                    $"This will back up every affected file, then apply {selected.Count} setting(s){profileDescription}. Continue?",
+                    "Import MP Config", CustomMessageBox.MessageBoxButtons.YesNo) != CustomMessageBox.DialogResult.Yes)
                 return;
 
             if (!EnsureBackup())
                 return;
 
+            BsaBundleApplyResult applied;
             try
             {
-                var result = BsaConfigComposition.InstallBsaFilesFromPackage(package,
-                    installChecklist: package.ChecklistJson != null,
-                    installKeyPolicy: package.KeyPolicyJson != null,
-                    installLockPolicy: package.LockPolicyJson != null,
-                    installWarnings: package.WarningsXml != null);
-
-                var installedMessage = "Installed: " + string.Join(", ", result.InstalledFiles) +
-                                       ".\nRestart Mission Planner for the new BSA configuration to take effect.";
-                // Warnings are the exception - the engine was reloaded in place, so they are live now.
-                if (result.InstalledFiles.Contains(BsaConfigInstaller.WarningsFileName))
-                    installedMessage += result.WarningsReloadError == null
-                        ? "\n\nThe imported warnings are already active - open the Warnings Manager to review them."
-                        : "\n\nThe warnings were written but could not be loaded into the running session (" +
-                          result.WarningsReloadError + "); they will take effect after the restart.";
-
-                // On the apply path the operator has already been shown where the backup went; on the
-                // two no-settings-applied paths this is their only sight of it.
-                if (_appliedKeys == null)
-                    installedMessage += "\n\nA backup of your previous config was saved to:\n" + _backupPath;
-
-                CustomMessageBox.Show(installedMessage, "Import MP Config");
+                applied = BsaConfigComposition.ApplyBundleImport(package, selected,
+                    new BsaBundleApplyOptions
+                    {
+                        InstallChecklist = AskToInstallOptional(package.ChecklistJson, "preflight checklist"),
+                        InstallKeyPolicy = AskToInstallOptional(package.KeyPolicyJson, "configuration key policy"),
+                        InstallLockPolicy = AskToInstallOptional(package.LockPolicyJson, "operational lock policy; it must be re-approved in Engineering Mode"),
+                        InstallWarnings = AskToInstallOptional(package.WarningsXml,
+                            "set of warning definitions; they REPLACE this machine's existing warnings rather than adding to them"),
+                        InstallPlugins = AskToInstallPlugins(package)
+                    });
+                _appliedKeys = new List<string>(applied.ChangedSettings);
+                _transactionDirectory = applied.TransactionDirectory;
+                _restartRequired = applied.RestartRequired;
             }
             catch (Exception ex)
             {
-                CustomMessageBox.Show("Could not install the BSA configuration files:\n" + ex.Message, "Import MP Config");
+                CustomMessageBox.Show(
+                    $"Import failed and was rolled back:\n{ex.Message}\n\nA backup of your previous config is at:\n{_backupPath}",
+                    "Import MP Config");
+                Close();
+                return;
             }
+
+            CustomMessageBox.Show(ResultMessage(applied, _backupPath), "Import MP Config");
+            ShowLocalSetupStep();
+        }
+
+        public static string ResultMessage(BsaBundleApplyResult applied, string backupPath)
+        {
+            if (applied.NoChangesRequired)
+                return "This bundle is already installed and verified on this machine - nothing was changed " +
+                       "and no restart is needed.\n\n" +
+                       $"Installed by transaction:\n{applied.TransactionDirectory}\n\n" +
+                       $"A backup of your current config was saved to:\n{backupPath}";
+
+            var message = $"Bundle staged successfully. {applied.ChangedSettings?.Count ?? 0} setting(s) changed.\n\n" +
+                          $"Transaction and rollback data:\n{applied.TransactionDirectory}\n\n" +
+                          $"A backup of your previous config was saved to:\n{backupPath}\n\n" +
+                          "Restart Mission Planner to verify and commit the installation.";
+            if (applied.WarningsInstalled)
+                message += applied.WarningsReloadError == null
+                    ? "\n\nThe imported warnings are already active - open the Warnings Manager to review them."
+                    : "\n\nThe warnings were written but could not be loaded into the running session (" +
+                      applied.WarningsReloadError + "); they will take effect after the restart.";
+            return message;
+        }
+
+        static string BundleSummary(ConfigPackageContents package)
+        {
+            if (package.IsLegacy)
+                return "Settings package with no aircraft profile (settings, quick panel and BSA files only).\n" +
+                       (package.WarningsXml != null ? "Carries warning definitions.\n" : string.Empty);
+            var lines = new List<string>
+            {
+                "\nBundle components:",
+                $"Quick panel: {package.QuickView?.Cells.Count ?? 0} cells",
+                $"Stable telemetry bindings: {package.TelemetryBindings?.Bindings.Count ?? 0}",
+                $"Warning definitions: {(package.WarningsXml != null ? "included - replaces this machine's set" : "none")}",
+                $"Health rules: {package.HealthRules?.Rules.Count ?? 0}",
+                $"Executable plugins: {package.Plugins.Count}"
+            };
+            foreach (var cell in package.QuickView?.Cells ?? new List<BsaQuickViewCell>())
+                lines.Add($"  QuickView {cell.Position:D2}: {cell.SourceId} => {cell.Label}");
+            foreach (var binding in package.TelemetryBindings?.Bindings ?? new List<BsaTelemetryBinding>())
+                lines.Add($"  Binding: {binding.FieldId}; supported={binding.Supported}; freshness={binding.FreshnessSeconds}s");
+            foreach (var health in package.HealthRules?.Rules ?? new List<BsaHealthRule>())
+                lines.Add($"  Health: {health.OutputFieldId} <= {health.Kind}; freshness={health.FreshnessSeconds}s; grace={health.ArmedGraceSeconds}s");
+            lines.Add(package.Plugins.Count == 0
+                ? "Data-only bundle; no executable code."
+                : "Contains executable code. Plugins are unsigned - installing them is a separate, explicit choice.");
+            return string.Join("\n", lines) + "\n";
+        }
+
+        static bool AskToInstallOptional(string content, string description)
+        {
+            return content != null && CustomMessageBox.Show(
+                "This bundle includes an optional " + description + ". Install it? The current file is included in the transaction backup.",
+                "Import MP Config", CustomMessageBox.MessageBoxButtons.YesNo) == CustomMessageBox.DialogResult.Yes;
+        }
+
+        static bool AskToInstallPlugins(ConfigPackageContents package)
+        {
+            if (package.Plugins.Count == 0) return false;
+
+            var names = string.Join("\n", package.Plugins.Select(p =>
+                "  - " + p.PluginId + (string.IsNullOrWhiteSpace(p.Version) ? "" : " " + p.Version)));
+
+            return CustomMessageBox.Show(
+                       "This bundle contains " + package.Plugins.Count + " executable plugin(s):\n\n" + names +
+                       "\n\nA plugin is program code that Mission Planner runs at start-up, with the same " +
+                       "access to the aircraft as the rest of the application. Nothing verifies who produced " +
+                       "it - install it only if you trust where this bundle came from.\n\nInstall the plugin(s)?",
+                       "Import MP Config - executable code",
+                       CustomMessageBox.MessageBoxButtons.YesNo) == CustomMessageBox.DialogResult.Yes;
         }
 
         /// <summary>
@@ -359,7 +374,7 @@ namespace MissionPlanner.BSA.UI
         /// </summary>
         void OfferRestartThenClose()
         {
-            if (_appliedKeys != null && _appliedKeys.Count > 0)
+            if (_restartRequired)
             {
                 var vehicleConnected = MainV2.comPort?.BaseStream?.IsOpen == true;
                 var message = "Restart Mission Planner now so the imported settings take effect? " +

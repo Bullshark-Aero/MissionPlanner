@@ -16,13 +16,27 @@ namespace MissionPlanner.BSA.Config
             string warningsXmlPathOrNull,
             string version, string operatorName, string missionPlannerVersion, string releaseNotes)
         {
+            return Export(outputPath, liveConfig, policy, checklistJsonPath, keyPolicyJsonPath,
+                lockPolicyJsonPathOrNull, warningsXmlPathOrNull, version, operatorName, missionPlannerVersion,
+                releaseNotes, null, null);
+        }
+
+        public static PackageManifest Export(string outputPath, IReadOnlyDictionary<string, string> liveConfig,
+            KeyPolicyConfig policy, string checklistJsonPath, string keyPolicyJsonPath, string lockPolicyJsonPathOrNull,
+            string warningsXmlPathOrNull,
+            string version, string operatorName, string missionPlannerVersion, string releaseNotes,
+            BsaBundleProfile profile, string packageId, IReadOnlyList<BsaPluginExport> plugins = null)
+        {
             if (liveConfig == null) throw new ArgumentNullException(nameof(liveConfig));
             if (policy == null) throw new ArgumentNullException(nameof(policy));
+            if (profile == null && plugins != null && plugins.Count > 0)
+                throw new InvalidOperationException("Plugins can only be carried by a bundle with an aircraft profile.");
 
             var subset = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var kv in liveConfig)
             {
-                if (KeyClassifier.Classify(kv.Key, policy) == KeyClass.Portable)
+                if ((profile == null || !BsaQuickViewCodec.OwnsSetting(kv.Key)) &&
+                    KeyClassifier.Classify(kv.Key, policy) == KeyClass.Portable)
                     subset[kv.Key] = kv.Value;
             }
 
@@ -37,9 +51,13 @@ namespace MissionPlanner.BSA.Config
                         $"Refusing to export: key '{key}' is classified Secret and must never leave this machine.");
             }
 
-            return BsaConfigPackage.Write(outputPath, subset, checklistJsonPath, keyPolicyJsonPath,
-                lockPolicyJsonPathOrNull, warningsXmlPathOrNull,
-                version, operatorName, missionPlannerVersion, releaseNotes);
+            return profile == null
+                ? BsaConfigPackage.WriteLegacy(outputPath, subset, checklistJsonPath, keyPolicyJsonPath,
+                    lockPolicyJsonPathOrNull, warningsXmlPathOrNull,
+                    version, operatorName, missionPlannerVersion, releaseNotes)
+                : BsaConfigPackage.Write(outputPath, subset, checklistJsonPath, keyPolicyJsonPath,
+                    lockPolicyJsonPathOrNull, warningsXmlPathOrNull,
+                    version, operatorName, missionPlannerVersion, releaseNotes, profile, packageId, plugins);
         }
     }
 }

@@ -86,7 +86,7 @@ namespace MissionPlanner.BSA.Config
             return result;
         }
 
-        static void EnsureParseableWarnings(string warningsXml)
+        internal static void EnsureParseableWarnings(string warningsXml)
         {
             try
             {

@@ -35,8 +35,18 @@ namespace MissionPlanner.BSA.Tests
             var checklistPath = TempJsonFile();
             var keyPolicyPath = TempJsonFile();
             var outputPath = TempPackagePath();
-            BsaConfigPackage.Write(outputPath, subset, checklistPath, keyPolicyPath, null, null,
+            BsaConfigPackage.WriteLegacy(outputPath, subset, checklistPath, keyPolicyPath, null, null,
                 "1.0.0", "op", mpVersion, "");
+            return outputPath;
+        }
+
+        static string WriteV2Package(IReadOnlyDictionary<string, string> subset, string mpVersion = "1.3.83")
+        {
+            var checklistPath = TempJsonFile();
+            var keyPolicyPath = TempJsonFile();
+            var outputPath = TempPackagePath();
+            BsaConfigPackage.Write(outputPath, subset, checklistPath, keyPolicyPath, null, null,
+                "1.0.0", "op", mpVersion, "", null, "aero.bullshark.test.bundle");
             return outputPath;
         }
 
@@ -57,16 +67,15 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
-        public void Validate_DifferentMajorVersion_Warns_ButStillReturnsPackage()
+        public void Validate_V2WithoutMaximum_AllowsNewerMajorVersion()
         {
-            var path = WritePackage(new Dictionary<string, string> { ["distunits"] = "0" }, "1.3.83");
+            var path = WriteV2Package(new Dictionary<string, string> { ["distunits"] = "0" }, "1.3.83");
             try
             {
                 var result = BsaConfigImporter.Validate(path, "2.0.0");
-                Assert.IsFalse(result.VersionCompatible);
-                StringAssert.Contains(result.VersionWarning, "1.3.83");
-                StringAssert.Contains(result.VersionWarning, "2.0.0");
-                Assert.IsNotNull(result.Package, "A version warning must never block validation from returning the package.");
+                Assert.IsTrue(result.VersionCompatible);
+                Assert.IsNull(result.VersionWarning);
+                Assert.IsNotNull(result.Package);
             }
             finally
             {
@@ -75,18 +84,10 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
-        public void Validate_MissingOrUnparseableVersion_NoWarning()
+        public void WriteV2_MissingCompatibilityVersion_IsRejected()
         {
-            var path = WritePackage(new Dictionary<string, string> { ["distunits"] = "0" }, "");
-            try
-            {
-                var result = BsaConfigImporter.Validate(path, "1.3.90");
-                Assert.IsTrue(result.VersionCompatible, "Absence of version data must not be treated as evidence of incompatibility.");
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            Assert.ThrowsException<InvalidDataException>(() =>
+                WriteV2Package(new Dictionary<string, string> { ["distunits"] = "0" }, ""));
         }
 
         [TestMethod]
@@ -284,7 +285,7 @@ namespace MissionPlanner.BSA.Tests
             try
             {
                 var subset = new Dictionary<string, string> { ["distunits"] = "0" };
-                BsaConfigPackage.Write(outputPath, subset, checklistPath, keyPolicyPath, null, null,
+                BsaConfigPackage.WriteLegacy(outputPath, subset, checklistPath, keyPolicyPath, null, null,
                     "1.0.0", "op", "1.3.83", "");
 
                 var package = BsaConfigPackage.Read(outputPath);

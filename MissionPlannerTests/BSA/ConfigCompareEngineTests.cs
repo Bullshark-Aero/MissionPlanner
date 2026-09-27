@@ -20,6 +20,59 @@ namespace MissionPlanner.BSA.Tests
             Default = KeyClass.MachineSpecific
         };
 
+        static KeyPolicyConfig PolicyWithQuickPanel()
+        {
+            var policy = Policy();
+            policy.Rules.Add(new KeyPolicyRule { Match = "quickview*", Class = KeyClass.Portable });
+            return policy;
+        }
+
+        static ConfigPackageContents PackageWith(Dictionary<string, string> subset, bool quickPanelProfile) =>
+            new ConfigPackageContents
+            {
+                ConfigSubset = subset,
+                QuickView = quickPanelProfile
+                    ? new BsaQuickViewProfile { Rows = 1, Columns = 1, Cells = { new BsaQuickViewCell { Position = 1, SourceId = "alt" } } }
+                    : null
+            };
+
+        [TestMethod]
+        public void PackageWithQuickPanelProfile_IgnoresQuickPanelSettingsOnBothSides()
+        {
+            var live = new Dictionary<string, string>
+            {
+                ["distunits"] = "0", ["quickView1_label"] = "RENAMED", ["quickViewRows"] = "2", ["quickViewLabel_alt"] = "Mine"
+            };
+            var package = PackageWith(new Dictionary<string, string> { ["distunits"] = "0", ["quickView1_label"] = "ALT" }, true);
+
+            var result = ConfigCompareEngine.Compare(live, package, PolicyWithQuickPanel());
+
+            Assert.IsTrue(result.IsMatch);
+        }
+
+        [TestMethod]
+        public void PackageWithQuickPanelProfile_StillReportsOtherDifferences()
+        {
+            var live = new Dictionary<string, string> { ["distunits"] = "1", ["quickView1_label"] = "RENAMED" };
+            var package = PackageWith(new Dictionary<string, string> { ["distunits"] = "0" }, true);
+
+            var result = ConfigCompareEngine.Compare(live, package, PolicyWithQuickPanel());
+
+            CollectionAssert.AreEqual(new[] { "distunits" }, result.MismatchedKeys);
+            Assert.AreEqual(0, result.LiveOnlyKeys.Count);
+        }
+
+        [TestMethod]
+        public void PackageWithoutQuickPanelProfile_StillComparesQuickPanelSettings()
+        {
+            var live = new Dictionary<string, string> { ["distunits"] = "0", ["quickView1_label"] = "RENAMED" };
+            var package = PackageWith(new Dictionary<string, string> { ["distunits"] = "0", ["quickView1_label"] = "ALT" }, false);
+
+            var result = ConfigCompareEngine.Compare(live, package, PolicyWithQuickPanel());
+
+            CollectionAssert.AreEqual(new[] { "quickView1_label" }, result.MismatchedKeys);
+        }
+
         [TestMethod]
         public void IdenticalPortableKeys_IsMatch()
         {
