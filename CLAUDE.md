@@ -36,7 +36,7 @@ $vstest  = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\Co
 
 # Build + run tests (MSTest)
 & $msbuild MissionPlannerTests\MissionPlannerTests.csproj /restore /t:Build /p:Configuration=Debug /m
-& $vstest "MissionPlannerTests\bin\Debug\net472\MissionPlannerTests.dll" /TestCaseFilter:"FullyQualifiedName~MissionPlanner.BSA.Tests"
+& $vstest "MissionPlannerTests\bin\Debug\net472\MissionPlannerTests.dll" /TestCaseFilter:"FullyQualifiedName~MissionPlanner.BSA.Tests|FullyQualifiedName~LogSortTests"
 
 # Single test
 & $vstest "MissionPlannerTests\bin\Debug\net472\MissionPlannerTests.dll" /TestCaseFilter:"FullyQualifiedName~BsaHashTests.SameLogicalObject_DifferentKeyOrder_SameHash"
@@ -102,6 +102,7 @@ Not everything fork-specific fits behind the BSA boundary. The live ones, each w
 - **VTOL-only mode list** (`ExtLibs/ArduPilot/Common.cs`). `getCommandableModesList()` strips `NonVtolPlaneModes` — `{3, 4, 14, 16, 24}`, ArduPlane mode *numbers* because the metadata's names and casing move between releases — and feeds the **command** surfaces only: the Flight Data mode combo (`bindQuickModeList`), `Joystick/Joy_ChangeMode.cs`, and `MAVLinkInterface.setMode(..., string)`, the single funnel all of them reach (so plugins are covered too). `getModesList()` stays unfiltered because it also names *incoming* heartbeats — filter it and the HUD keeps showing the previous mode after an RC-switch, failsafe or `DO_SET_MODE` into a withheld one, i.e. the GCS lying about the aircraft. The filter applies to `Firmwares.ArduPlane` only (3 is Auto on Copter). New mode UI must pick the right list deliberately.
 - **QuickView appearance and scaling** (`ExtLibs/Controls/QuickView.cs`, `GCSViews/FlightData.cs`). Per-view label/value colour, hide, and a field-keyed label memory, all persisted through `Settings`; the number's font size is re-derived from a fixed probe on **every** paint rather than carried from the last one (carrying it made the size depend on resize history and oscillate with digit count). `colourLocked` opts a view out of the theme's per-name colouring (`Utilities/ThemeManager.cs:1082`).
 - **Judicar health fields** (`ExtLibs/ArduPilot/CurrentState.cs`). `J26_DATA_OK`, `J26_ESC_OK` and `J26_GPS_RED_OK` are written only by `BSA/Telemetry/JudicarHealthService` and default to **0 (not OK)**. Never give them a healthy default: if the service fails to start, the fields must fail closed so their warnings fire while armed. A start failure is also shown to the operator from `MainV2.OnLoad`.
+- **Log sorting** (`ExtLibs/Utilities/LogSort.cs`). `SortLogs` files each `.tlog` under `<type>\<sysid>` from the first 11 heartbeats in it, by itself at start-up, after a disconnect and on close. `SelectVehicleHeartbeat` picks the autopilot: component 1 first, then a real autopilot type, then the lowest sysid, compid and type. Component 0, ADS-B, antenna-tracker and GCS heartbeats never decide, because a Judicar 2600 also sends an ADS-B heartbeat on component 0 and the old last-one-wins loop filed its flight logs under `ADSB\1`. With nothing eligible, the last heartbeat read still decides. Pinned by `MissionPlannerTests/Utilities/LogSortTests.cs`.
 - **Warning manager** — extensions in `Warnings/` plus the quickview colouring sweep at the bottom of `MainV2.cs`; exported/imported as part of the BSA config package (above).
 - **Branding and parameter metadata** — `Program.cs`, `Properties/AssemblyInfo.cs`, `Splash.Designer.cs`, `mpdesktop*.ico/png`, `Resources/splashdark.jpg`; BSA custom params appended to `ParameterMetaDataBackup.xml`.
 
@@ -118,6 +119,6 @@ Not everything fork-specific fits behind the BSA boundary. The live ones, each w
 
 ### Tests
 
-`MissionPlannerTests/` (MSTest, net472) is in `MissionPlanner.sln`. BSA tests live in `MissionPlannerTests/BSA/` under namespace `MissionPlanner.BSA.Tests` — **447 tests across 48 files, all green (last full run 2026-09-27 on `feature-judicar-airspeed-display`); keep it that way**. Pre-existing upstream test files elsewhere in the project may not all pass; don't chase those.
+`MissionPlannerTests/` (MSTest, net472) is in `MissionPlanner.sln`. BSA tests live in `MissionPlannerTests/BSA/` under namespace `MissionPlanner.BSA.Tests` — **447 tests across 48 files, all green (last full run 2026-09-27 on `feature-judicar-log-sorting`); keep it that way**. Fork tests outside it are run by the same filter: `MissionPlannerTests/Utilities/LogSortTests.cs` (namespace `MissionPlanner.Utilities.Tests`, 4 tests) covers the log-sorting change, for 451 in all. Pre-existing upstream test files elsewhere in the project may not all pass; don't chase those.
 
 Tests run against the real `Settings.Instance`, i.e. the machine's actual configuration. A test asserting that *no* record exists must purge the keys it cares about in `TestInitialize` and put them back in `TestCleanup` — otherwise it passes or fails depending on whose machine runs it.
