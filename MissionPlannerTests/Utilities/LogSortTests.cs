@@ -95,8 +95,6 @@ namespace MissionPlanner.Utilities.Tests
 
             using (var stream = File.Create(path))
             {
-                // LogSort ignores files at or below 1 KiB. Repeating the sequence also models
-                // the alternating component heartbeats seen in the Judicar telemetry log.
                 for (var index = 0; index < 64; index++)
                 {
                     stream.Write(timestamp, 0, timestamp.Length);

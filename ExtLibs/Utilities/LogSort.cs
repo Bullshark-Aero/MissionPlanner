@@ -191,9 +191,6 @@ namespace MissionPlanner.Log
                             return;
                         }
 
-                        // Prefer the flight controller heartbeat over peripheral heartbeats. The
-                        // order of heartbeats in a telemetry log is not stable, so allowing the
-                        // last one to win can file a vehicle log under ADSB or another component.
                         var vehicleHeartbeat = SelectVehicleHeartbeat(hblist);
                         if (vehicleHeartbeat != null)
                         {

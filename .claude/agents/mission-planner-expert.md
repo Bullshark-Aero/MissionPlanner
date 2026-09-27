@@ -73,6 +73,7 @@ Isolated and dependency-injected: only composition roots touch `MainV2`/`Setting
 
 ## Logs & analysis
 - `Log/LogBrowse.cs` — dataflash log graphing/browsing; `Log/LogDownload.cs` — pulling logs off the vehicle; `LogAnalyzer/` — automated log checks.
+- `ExtLibs/Utilities/LogSort.cs` — files tlogs under `<type>\<sysid>` at start-up, disconnect and close. Fork change: `SelectVehicleHeartbeat` lets only the autopilot decide, never component 0, ADS-B, tracker or GCS heartbeats (a Judicar 2600's ADS-B heartbeat used to send its flight logs to `ADSB\1`). Tests: `MissionPlannerTests/Utilities/LogSortTests.cs`.
 - `ExtLibs/Utilities/DFLog.cs`, `DFLogBuffer.cs`, `BinaryLog.cs` — dataflash (.bin/.log) parsing. Tlogs are raw MAVLink streams replayed through `MAVLinkInterface`.
 
 ## Parameters, settings & theming
@@ -92,7 +93,7 @@ Isolated and dependency-injected: only composition roots touch `MainV2`/`Setting
 
 What this agent adds on top:
 
-- **Tests**: `MissionPlannerTests/BSA/` (MSTest, namespace `MissionPlanner.BSA.Tests`) is 376 tests across 39 files (all green as of 2026-09-18, `d306f20ad`) and is actively maintained — it must stay green, and new fork logic is expected to arrive with tests. Upstream coverage outside it is thin, so a green run does **not** validate a protocol or UI change.
+- **Tests**: `MissionPlannerTests/BSA/` (MSTest, namespace `MissionPlanner.BSA.Tests`) is 447 tests across 48 files (all green as of 2026-09-27), plus the 4 fork log-sort tests in `MissionPlannerTests/Utilities/LogSortTests.cs` that run with it (filter `FullyQualifiedName~MissionPlanner.BSA.Tests|FullyQualifiedName~LogSortTests`), and is actively maintained — it must stay green, and new fork logic is expected to arrive with tests. Upstream coverage outside it is thin, so a green run does **not** validate a protocol or UI change.
 - **Real validation**: build, then exercise via **SITL** (`GCSViews/SITL.cs`) or tlog replay. For protocol changes, watch the MAVLink Inspector (Ctrl-F → `temp` form); for UI changes, check connected *and* disconnected states, both themes, and — for anything that persists — across a restart.
 - **Proving a UI change**: UIAutomation cannot see this app's content. Drive it with Win32 `EnumChildWindows`, navigate `ToolStrip` items by keyboard (they have no HWND), and verify from screenshots — `GetWindowText` does not reflect a programmatic `TextBox.Text` assignment, and a colour claim is only real if you sampled the pixels.
 - **WinForms mechanics**: every form/control has a `.Designer.cs` (machine-generated — edit via designer semantics, keep `InitializeComponent` consistent) and a chain of per-locale `.resx` files. New user-facing strings go in the neutral `.resx`; missing translations are acceptable, hardcoded English strings in code are not (unless you are matching an existing inline-text precedent in the same designer block). UI updates from `SerialReader` or async contexts must marshal to the UI thread (`BeginInvoke`) — cross-thread control access is a recurring bug class here.
