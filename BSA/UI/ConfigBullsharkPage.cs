@@ -242,6 +242,17 @@ namespace MissionPlanner.BSA.UI
                 profile = BsaBundleProfileCatalog.Find(choice.SelectedOptionId);
             }
 
+            var undeclared = profile.CarriesProfile
+                ? BsaConfigComposition.UndeclaredQuickViewCellsFor(profile.Id)
+                : new List<BsaQuickViewCell>();
+            if (undeclared.Count > 0 && CustomMessageBox.Show(
+                    $"The quick panel shows values that the {profile.DisplayName} profile does not list:\n\n" +
+                    string.Join("\n", undeclared.Select(c => $"  {c.SourceId} (view {c.Position})")) +
+                    "\n\nThe aircraft is not expected to send them, so these views will be in the bundle but show no value. " +
+                    "To leave them out, choose No, clear those views on Flight Data, and export again.\n\nExport anyway?",
+                    "Export MP Config", CustomMessageBox.MessageBoxButtons.YesNo) != CustomMessageBox.DialogResult.Yes)
+                return;
+
             var plugins = new List<BsaPluginExport>();
             var installedPlugins = profile.CarriesProfile ? BsaConfigComposition.InstalledPluginsForExport() : new List<BsaPluginExport>();
             if (installedPlugins.Count > 0)

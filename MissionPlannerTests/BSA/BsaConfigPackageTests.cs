@@ -85,7 +85,7 @@ namespace MissionPlanner.BSA.Tests
                 Assert.AreEqual("MAV_ESC_HOT", read.QuickView.Cells[0].SourceId);
                 Assert.AreEqual("ESC TEMP", read.QuickView.Labels["MAV_ESC_HOT"]);
                 Assert.AreEqual("AS", read.QuickView.Labels["airspeed"]);
-                Assert.AreEqual(13, read.TelemetryBindings.Bindings.Count);
+                Assert.AreEqual(12, read.TelemetryBindings.Bindings.Count);
                 Assert.AreEqual(3, read.HealthRules.Rules.Count);
                 Assert.IsTrue(read.HasWarnings);
             }

@@ -11,7 +11,7 @@ namespace MissionPlanner.BSA.Config
         {
             "MAV_VTOL_RES", "MAV_VTOL_MAR", "MAV_AV_RES", "MAV_AV_MAR", "MAV_ESC_HOT",
             "MAV_CHT_HOT", "MAV_FR_MOT_T", "MAV_LIFT_HDR", "MAV_SURF_HDR", "MAV_ATT_ERR5",
-            "MAV_ALT_ERR5", "MAV_LIDAR_M", "MAV_AS_DIF5"
+            "MAV_ALT_ERR5", "MAV_LIDAR_M"
         };
 
         public static BsaBundleProfile Create(BsaQuickViewProfile quickView)
@@ -23,9 +23,9 @@ namespace MissionPlanner.BSA.Config
                 {
                     FieldId = field,
                     SourceKind = "NAMED_VALUE_FLOAT",
-                    ExpectedCadenceHz = field == "MAV_AS_DIF5" ? 0 : 1,
+                    ExpectedCadenceHz = 1,
                     FreshnessSeconds = 5,
-                    Supported = field != "MAV_AS_DIF5"
+                    Supported = true
                 });
             }
 

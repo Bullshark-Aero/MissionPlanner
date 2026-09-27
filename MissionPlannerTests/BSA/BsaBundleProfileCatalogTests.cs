@@ -108,6 +108,71 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
+        public void Judicar_DescriptionStatesTheCurrentBindingCount()
+        {
+            var judicar = BsaBundleProfileCatalog.Find(Judicar2600BundleProfile.PackageId);
+
+            StringAssert.Contains(judicar.Description, "the " + Judicar2600BundleProfile.NamedFields.Length + " Judicar telemetry bindings");
+        }
+
+        static BsaBundleProfile JudicarWithCells(params BsaQuickViewCell[] cells)
+        {
+            var quickView = new BsaQuickViewProfile { Rows = 1, Columns = cells.Length };
+            for (var i = 0; i < cells.Length; i++)
+            {
+                cells[i].Position = i + 1;
+                quickView.Cells.Add(cells[i]);
+            }
+            return Judicar2600BundleProfile.Create(quickView);
+        }
+
+        [TestMethod]
+        public void UndeclaredCells_ReportsAVisibleNamedValueTheProfileDoesNotList()
+        {
+            var profile = JudicarWithCells(
+                new BsaQuickViewCell { SourceId = "MAV_ESC_HOT" },
+                new BsaQuickViewCell { SourceId = "MAV_AS_DIF5" },
+                new BsaQuickViewCell { SourceId = "airspeed" });
+
+            var undeclared = BsaBundleProfileCatalog.UndeclaredNamedValueCells(profile);
+
+            Assert.AreEqual(1, undeclared.Count);
+            Assert.AreEqual("MAV_AS_DIF5", undeclared[0].SourceId);
+            Assert.AreEqual(2, undeclared[0].Position);
+        }
+
+        [TestMethod]
+        public void UndeclaredCells_IgnoresHiddenAndEmptyViews()
+        {
+            var profile = JudicarWithCells(
+                new BsaQuickViewCell { SourceId = "MAV_AS_DIF5", Visible = false },
+                new BsaQuickViewCell { SourceId = null });
+
+            Assert.AreEqual(0, BsaBundleProfileCatalog.UndeclaredNamedValueCells(profile).Count);
+        }
+
+        [TestMethod]
+        public void UndeclaredCells_TreatsAnUnsupportedBindingAsUndeclared_AndAnAliasAsDeclared()
+        {
+            var profile = JudicarWithCells(
+                new BsaQuickViewCell { SourceId = "MAV_OLD" },
+                new BsaQuickViewCell { SourceId = "MAV_ESC_TEMP" });
+            profile.TelemetryBindings.Bindings.Add(new BsaTelemetryBinding { FieldId = "MAV_OLD", Supported = false });
+            profile.TelemetryBindings.Bindings.First(b => b.FieldId == "MAV_ESC_HOT").Aliases.Add("MAV_ESC_TEMP");
+
+            var undeclared = BsaBundleProfileCatalog.UndeclaredNamedValueCells(profile);
+
+            Assert.AreEqual(1, undeclared.Count);
+            Assert.AreEqual("MAV_OLD", undeclared[0].SourceId);
+        }
+
+        [TestMethod]
+        public void UndeclaredCells_NoProfile_ReportsNothing()
+        {
+            Assert.AreEqual(0, BsaBundleProfileCatalog.UndeclaredNamedValueCells(null).Count);
+        }
+
+        [TestMethod]
         public void ChoiceForm_StartsWithNothingChosen_AndCannotContinue()
         {
             using (var form = new BundleProfileChoiceForm(BsaBundleProfileCatalog.Options))

@@ -84,6 +84,21 @@ namespace MissionPlanner.BSA.Config
                 }).ToList(),
                 Path.Combine(Settings.GetRunningDirectory(), "plugins"));
 
+        public static List<BsaQuickViewCell> UndeclaredQuickViewCellsFor(string profileId)
+        {
+            _ = Settings.Instance;
+            try
+            {
+                return BsaBundleProfileCatalog.UndeclaredNamedValueCells(BsaBundleProfileCatalog.CreateFor(
+                    BsaBundleProfileCatalog.Find(profileId),
+                    () => BsaQuickViewCodec.Export(Settings.config, CurrentState.custom_field_names)));
+            }
+            catch (Exception)
+            {
+                return new List<BsaQuickViewCell>();
+            }
+        }
+
         public static PackageManifest ExportNow(string outputPath, string operatorName, string version, string releaseNotes,
             string profileId, IReadOnlyList<BsaPluginExport> plugins = null)
         {
