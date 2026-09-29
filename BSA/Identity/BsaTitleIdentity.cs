@@ -27,11 +27,6 @@ namespace MissionPlanner.BSA.Identity
             @"^[0-9A-Fa-f]+$",
             RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-        public static string BuildBaseTitle(string productName, string productVersion)
-        {
-            return JoinParts(NormalizeWhitespace(productName), NormalizeWhitespace(productVersion));
-        }
-
         public static string BuildConnectedTitle(
             string baseTitle,
             string firmwareBanner,

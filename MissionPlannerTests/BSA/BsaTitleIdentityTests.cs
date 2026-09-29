@@ -6,16 +6,9 @@ namespace MissionPlanner.BSA.Tests
     [TestClass]
     public class BsaTitleIdentityTests
     {
-        const string BaseTitle = "BullShark Mission Planner 1.3.83";
+        const string BaseTitle = "BullShark Mission Planner 1.3.83 build 1.3.9768.32713";
         const string SerialBanner = "CubeOrangePlus 0031001F 30325104 33383839";
         const string CanonicalUid = "1F0031000451323039383833";
-
-        [TestMethod]
-        public void BaseTitleContainsProductAndBsmpVersionOnly()
-        {
-            Assert.AreEqual(BaseTitle,
-                BsaTitleIdentity.BuildBaseTitle("BullShark Mission Planner", "1.3.83"));
-        }
 
         [TestMethod]
         public void ExplicitBsaSemverProducesLayeredFirmwareIdentity()

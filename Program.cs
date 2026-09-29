@@ -3,7 +3,6 @@ using log4net;
 using log4net.Config;
 using MissionPlanner.Comms;
 using MissionPlanner.Controls;
-using MissionPlanner.BSA.Identity;
 using MissionPlanner.Utilities;
 using System;
 using System.Collections.Generic;
@@ -277,7 +276,10 @@ namespace MissionPlanner
             if (IconFile != null)
                 Splash.Icon = Icon.FromHandle(((Bitmap) IconFile).GetHicon());
 
-            Splash.Text = BsaTitleIdentity.BuildBaseTitle(name, Application.ProductVersion);
+            string strVersion = File.Exists("version.txt")
+                ? File.ReadAllText("version.txt")
+                : System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString();
+            Splash.Text = name + " " + Application.ProductVersion + " build " + strVersion;
             Console.WriteLine("Splash.Show()");
             Splash.Show();
 
