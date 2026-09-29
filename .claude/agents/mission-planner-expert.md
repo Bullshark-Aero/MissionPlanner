@@ -86,6 +86,7 @@ Isolated and dependency-injected: only composition roots touch `MainV2`/`Setting
 
 ## Plugins
 - `Plugin/` — host/loader; `Plugins/` — shipped plugins. Plugins get `MainV2.comPort` and UI hooks; a plugin is often the least invasive place for fork-specific features.
+- `BSA/Plugins/Judicar2600Lights.cs` — the fork's Actions-tab Lights button, built separately and not shipped (CLAUDE.md, "Shipping a build"). Shown only for an identified Judicar 2600; sends `DO_SET_SERVO` 15/16 to component 1 only; state is the last acknowledged command (`Judicar2600LightsState.cs`, unit-tested), because the CAN lights report no servo output. `BSA/Build/New-BsmpPortableRelease.ps1` packages operator releases and refuses aircraft payloads.
 
 # Build, test, validate
 
@@ -93,7 +94,7 @@ Isolated and dependency-injected: only composition roots touch `MainV2`/`Setting
 
 What this agent adds on top:
 
-- **Tests**: `MissionPlannerTests/BSA/` (MSTest, namespace `MissionPlanner.BSA.Tests`) is 447 tests across 48 files (all green as of 2026-09-27), plus the 4 fork log-sort tests in `MissionPlannerTests/Utilities/LogSortTests.cs` that run with it (filter `FullyQualifiedName~MissionPlanner.BSA.Tests|FullyQualifiedName~LogSortTests`), and is actively maintained — it must stay green, and new fork logic is expected to arrive with tests. Upstream coverage outside it is thin, so a green run does **not** validate a protocol or UI change.
+- **Tests**: `MissionPlannerTests/BSA/` (MSTest, namespace `MissionPlanner.BSA.Tests`) is 454 tests across 49 files (all green as of 2026-09-29), plus the 4 fork log-sort tests in `MissionPlannerTests/Utilities/LogSortTests.cs` that run with it (filter `FullyQualifiedName~MissionPlanner.BSA.Tests|FullyQualifiedName~LogSortTests`), and is actively maintained — it must stay green, and new fork logic is expected to arrive with tests. Upstream coverage outside it is thin, so a green run does **not** validate a protocol or UI change.
 - **Real validation**: build, then exercise via **SITL** (`GCSViews/SITL.cs`) or tlog replay. For protocol changes, watch the MAVLink Inspector (Ctrl-F → `temp` form); for UI changes, check connected *and* disconnected states, both themes, and — for anything that persists — across a restart.
 - **Proving a UI change**: UIAutomation cannot see this app's content. Drive it with Win32 `EnumChildWindows`, navigate `ToolStrip` items by keyboard (they have no HWND), and verify from screenshots — `GetWindowText` does not reflect a programmatic `TextBox.Text` assignment, and a colour claim is only real if you sampled the pixels.
 - **WinForms mechanics**: every form/control has a `.Designer.cs` (machine-generated — edit via designer semantics, keep `InitializeComponent` consistent) and a chain of per-locale `.resx` files. New user-facing strings go in the neutral `.resx`; missing translations are acceptable, hardcoded English strings in code are not (unless you are matching an existing inline-text precedent in the same designer block). UI updates from `SerialReader` or async contexts must marshal to the UI thread (`BeginInvoke`) — cross-thread control access is a recurring bug class here.
