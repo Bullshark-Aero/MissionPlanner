@@ -46,6 +46,14 @@ try {
         throw 'Application release contains the aircraft-specific Judicar lights plugin.'
     }
 
+    $exeConfig = Join-Path $stageRoot 'MissionPlanner.exe.config'
+    if (-not (Test-Path $exeConfig -PathType Leaf)) {
+        throw 'Application release has no MissionPlanner.exe.config.'
+    }
+    if ((Get-Content $exeConfig -Raw) -notmatch 'name="System\.Resources\.Extensions"') {
+        throw 'MissionPlanner.exe.config lacks the System.Resources.Extensions binding redirect; the exe would not start.'
+    }
+
     Push-Location $work
     try {
         & $SevenZipPath a -t7z -mx=9 $archive $rootName | Out-Host
@@ -66,12 +74,12 @@ try {
     $destination = [System.IO.File]::Open($output, [System.IO.FileMode]::Create)
     try {
         foreach ($part in @($sfxModule, $archive)) {
-            $input = [System.IO.File]::OpenRead($part)
+            $reader = [System.IO.File]::OpenRead($part)
             try {
-                $input.CopyTo($destination)
+                $reader.CopyTo($destination)
             }
             finally {
-                $input.Dispose()
+                $reader.Dispose()
             }
         }
     }
