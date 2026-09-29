@@ -4,10 +4,6 @@ using System.Text.RegularExpressions;
 
 namespace MissionPlanner.BSA.Identity
 {
-    /// <summary>
-    /// Builds the operator-visible application title from identities owned by BSMP and the connected autopilot.
-    /// A BSA firmware version is displayed only when the autopilot explicitly publishes a valid semantic version.
-    /// </summary>
     public static class BsaTitleIdentity
     {
         const string SemVer =
