@@ -151,7 +151,7 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
-        public void PluginChoiceForm_StartsWithNothingChosen_AndReportsTheChoice()
+        public void PluginChoiceForm_StartsWithEveryPluginChosen_AndReportsTheChoice()
         {
             var plugins = new List<BsaPluginExport>
             {
@@ -160,8 +160,8 @@ namespace MissionPlanner.BSA.Tests
             };
             using (var form = new BundlePluginChoiceForm(plugins))
             {
-                Assert.AreEqual(0, form.SelectedPlugins.Count);
-                form.Choose("B", true);
+                CollectionAssert.AreEqual(new[] { "A", "B" }, form.SelectedPlugins.Select(p => p.PluginId).ToList());
+                form.Choose("A", false);
                 CollectionAssert.AreEqual(new[] { "B" }, form.SelectedPlugins.Select(p => p.PluginId).ToList());
             }
         }

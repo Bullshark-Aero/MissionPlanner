@@ -42,8 +42,9 @@ namespace MissionPlanner.BSA.UI
             });
             layout.Controls.Add(new Label
             {
-                Text = "These plugins are installed and running on this ground station. Plugins are executable code: " +
-                       "whoever imports the bundle is asked before any of them is installed.",
+                Text = "These plugins are installed and running on this ground station, and all are included unless you " +
+                       "untick them. Plugins are executable code: importing the bundle installs the included ones and " +
+                       "removes every other plugin DLL from that ground station.",
                 AutoSize = true,
                 MaximumSize = new Size(460, 0),
                 Margin = new Padding(0, 0, 0, 10)
@@ -54,6 +55,7 @@ namespace MissionPlanner.BSA.UI
                 var box = new CheckBox
                 {
                     Text = plugin.DisplayName + " " + plugin.Version + "  (" + plugin.PluginId + ".dll)",
+                    Checked = true,
                     AutoSize = true,
                     Margin = new Padding(0, 2, 0, 2)
                 };
@@ -77,7 +79,7 @@ namespace MissionPlanner.BSA.UI
             Controls.Add(layout);
             AcceptButton = btnContinue;
             CancelButton = btnCancel;
-            ActiveControl = btnCancel;
+            ActiveControl = btnContinue;
         }
 
         public List<BsaPluginExport> SelectedPlugins =>
