@@ -41,6 +41,25 @@ namespace MissionPlanner.BSA.Tests
             StringAssert.Contains(message, "Bundle staged successfully. 2 setting(s) changed.");
             StringAssert.Contains(message, "Restart Mission Planner to verify and commit the installation.");
             StringAssert.Contains(message, "The imported warnings are already active");
+            Assert.IsFalse(message.Contains("Plugins"), "no plugin line when no plugin changed");
+        }
+
+        [TestMethod]
+        public void StagedImport_ReportsPluginChanges()
+        {
+            var message = ImportWizardForm.ResultMessage(new BsaBundleApplyResult
+            {
+                Status = BsaTransactionStatus.PendingRestart,
+                RestartRequired = true,
+                TransactionDirectory = @"C:\tx\new",
+                ChangedSettings = new List<string>(),
+                PluginsWritten = new List<string> { "Judicar2600Lights" },
+                PluginsRemoved = new List<string> { "Old.dll" }
+            }, @"C:\backups\b.bsampconfig");
+
+            StringAssert.Contains(message, "Plugins installed: Judicar2600Lights");
+            StringAssert.Contains(message, "Plugins removed: Old.dll");
+            StringAssert.Contains(message, "Plugin changes take effect after the restart.");
         }
     }
 }

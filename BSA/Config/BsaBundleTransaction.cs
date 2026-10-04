@@ -38,6 +38,7 @@ namespace MissionPlanner.BSA.Config
         public bool Existed { get; set; }
         public string BackupPath { get; set; }
         public bool DeleteOnCommit { get; set; }
+        public string AsidePath { get; set; }
     }
 
     public class BsaBundleApplyOptions
@@ -47,6 +48,7 @@ namespace MissionPlanner.BSA.Config
         public bool InstallLockPolicy { get; set; }
         public bool InstallWarnings { get; set; }
         public bool InstallPlugins { get; set; }
+        public bool RemoveUnlistedPlugins { get; set; }
     }
 
     public class BsaBundleApplyResult
@@ -59,6 +61,8 @@ namespace MissionPlanner.BSA.Config
         public bool NoChangesRequired { get; set; }
         public bool WarningsInstalled { get; set; }
         public bool PluginsInstalled { get; set; }
+        public IReadOnlyList<string> PluginsWritten { get; set; } = new List<string>();
+        public IReadOnlyList<string> PluginsRemoved { get; set; } = new List<string>();
         public string WarningsReloadError { get; set; }
     }
 
@@ -93,7 +97,9 @@ namespace MissionPlanner.BSA.Config
 
             var existing = FindCommittedInstallation(package, transactionsDirectory,
                 Path.Combine(Path.GetDirectoryName(bsaConfigDirectory), "install-state.json"), liveConfig);
-            if (existing != null && RequestedPluginsMissing(package, options, pluginDirectory))
+            if (existing != null && (RequestedPluginsMissing(package, options, pluginDirectory) ||
+                                     options?.RemoveUnlistedPlugins == true &&
+                                     BsaPluginFolder.Unlisted(package, pluginDirectory).Count > 0))
                 existing = null;
             if (existing != null)
                 return new BsaBundleApplyResult
@@ -154,11 +160,22 @@ namespace MissionPlanner.BSA.Config
             AddOptionalTarget(targets, package.LockPolicyJson, options?.InstallLockPolicy == true,
                 Path.Combine(bsaConfigDirectory, BsaConfigInstaller.LockPolicyFileName));
             var pluginsInstalled = options?.InstallPlugins == true && package.Plugins.Count > 0;
-            if (pluginsInstalled) StagePluginTargets(package, targets, pluginDirectory);
+            var pluginsWritten = new List<string>();
+            if (pluginsInstalled)
+                StagePluginTargets(package, targets, pluginDirectory, journal.ExpectedHashes, pluginsWritten);
 
             var deleteTargets = new List<string>();
             if (options?.InstallLockPolicy == true)
                 deleteTargets.Add(Path.Combine(bsaConfigDirectory, BsaConfigInstaller.LockPolicyFileName) + ".hash");
+            var pluginsRemoved = options?.RemoveUnlistedPlugins == true
+                ? BsaPluginFolder.Unlisted(package, pluginDirectory)
+                : new List<string>();
+            deleteTargets.AddRange(pluginsRemoved);
+
+            string AsideFor(string target) =>
+                IsInDirectory(target, pluginDirectory) && File.Exists(target)
+                    ? target + ".bsa-" + transactionId + ".aside"
+                    : null;
 
             var installStatePath = Path.Combine(Path.GetDirectoryName(bsaConfigDirectory), "install-state.json");
             journal.InstallStatePath = installStatePath;
@@ -177,7 +194,13 @@ namespace MissionPlanner.BSA.Config
                 var backup = Path.Combine(backups, journal.Files.Count.ToString("D3") + ".bin");
                 var existed = File.Exists(target.Key);
                 if (existed) File.Copy(target.Key, backup, false);
-                journal.Files.Add(new BsaTransactionFile { TargetPath = target.Key, Existed = existed, BackupPath = backup });
+                journal.Files.Add(new BsaTransactionFile
+                {
+                    TargetPath = target.Key,
+                    Existed = existed,
+                    BackupPath = backup,
+                    AsidePath = AsideFor(target.Key)
+                });
                 var stagePath = Path.Combine(staged, journal.Files.Count.ToString("D3") + ".bin");
                 File.WriteAllBytes(stagePath, target.Value);
                 if (editableTargets.Contains(target.Key))
@@ -195,7 +218,8 @@ namespace MissionPlanner.BSA.Config
                     TargetPath = target,
                     Existed = existed,
                     BackupPath = backup,
-                    DeleteOnCommit = true
+                    DeleteOnCommit = true,
+                    AsidePath = AsideFor(target)
                 });
             }
             WriteJournal(root, journal);
@@ -220,6 +244,8 @@ namespace MissionPlanner.BSA.Config
                 for (var index = 0; index < journal.Files.Count; index++)
                 {
                     var file = journal.Files[index];
+                    if (file.AsidePath != null && File.Exists(file.TargetPath))
+                        File.Move(file.TargetPath, file.AsidePath);
                     if (file.DeleteOnCommit)
                     {
                         if (File.Exists(file.TargetPath)) File.Delete(file.TargetPath);
@@ -242,6 +268,8 @@ namespace MissionPlanner.BSA.Config
                     ChangedSettings = changed,
                     WarningsInstalled = warningsInstalled,
                     PluginsInstalled = pluginsInstalled,
+                    PluginsWritten = pluginsWritten,
+                    PluginsRemoved = pluginsRemoved.Select(Path.GetFileName).ToList(),
                     RestartRequired = true
                 };
             }
@@ -308,6 +336,7 @@ namespace MissionPlanner.BSA.Config
                             MarkInstallStateCommitted(journal);
                             journal.Status = BsaTransactionStatus.Committed;
                             WriteJournal(Path.GetDirectoryName(journalPath), journal);
+                            DeleteAsideFiles(journal);
                         }
                         catch (Exception ex)
                         {
@@ -379,13 +408,19 @@ namespace MissionPlanner.BSA.Config
             return false;
         }
 
-        static void StagePluginTargets(ConfigPackageContents package, IDictionary<string, byte[]> targets, string pluginDirectory)
+        static void StagePluginTargets(ConfigPackageContents package, IDictionary<string, byte[]> targets, string pluginDirectory,
+            IDictionary<string, string> expectedHashes, ICollection<string> written)
         {
             if (package.Plugins.Count == 0) return;
             using (var archive = ZipFile.OpenRead(package.SourcePath))
             {
                 foreach (var plugin in package.Plugins)
                 {
+                    if (BsaPluginFolder.IsInstalled(plugin, pluginDirectory))
+                    {
+                        expectedHashes[Path.Combine(pluginDirectory, plugin.PluginId + ".dll")] = plugin.PayloadSha256.ToLowerInvariant();
+                        continue;
+                    }
                     var entry = archive.GetEntry(plugin.PayloadPath) ?? throw new InvalidDataException("Plugin payload is missing.");
                     using (var input = entry.Open())
                     using (var output = new MemoryStream())
@@ -397,6 +432,7 @@ namespace MissionPlanner.BSA.Config
                             throw new InvalidDataException(
                                 "Plugin '" + plugin.PluginId + "' does not match the payload this bundle was validated with.");
                         targets[Path.Combine(pluginDirectory, plugin.PluginId + ".dll")] = bytes;
+                        written.Add(plugin.PluginId);
                     }
                 }
             }
@@ -426,9 +462,39 @@ namespace MissionPlanner.BSA.Config
         {
             foreach (var file in journal.Files.AsEnumerable().Reverse())
             {
-                if (file.Existed) AtomicWrite(file.TargetPath, File.ReadAllBytes(file.BackupPath));
+                if (file.AsidePath != null && File.Exists(file.AsidePath))
+                {
+                    if (File.Exists(file.TargetPath)) File.Delete(file.TargetPath);
+                    File.Move(file.AsidePath, file.TargetPath);
+                }
+                else if (file.Existed)
+                {
+                    if (File.Exists(file.TargetPath) && File.Exists(file.BackupPath) &&
+                        BsaHash.HashFile(file.TargetPath) == BsaHash.HashFile(file.BackupPath))
+                        continue;
+                    AtomicWrite(file.TargetPath, File.ReadAllBytes(file.BackupPath));
+                }
                 else if (File.Exists(file.TargetPath)) File.Delete(file.TargetPath);
             }
+        }
+
+        static void DeleteAsideFiles(BsaTransactionJournal journal)
+        {
+            foreach (var file in journal.Files)
+            {
+                if (file.AsidePath == null || !File.Exists(file.AsidePath)) continue;
+                try { File.Delete(file.AsidePath); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+        }
+
+        static bool IsInDirectory(string path, string directory)
+        {
+            if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(directory)) return false;
+            var parent = Path.GetDirectoryName(Path.GetFullPath(path));
+            var expected = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return string.Equals(parent, expected, StringComparison.OrdinalIgnoreCase);
         }
 
         static void RestoreExactSettingsFile(BsaTransactionJournal journal)

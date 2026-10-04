@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MissionPlanner.BSA.Config;
+using MissionPlanner.BSA.UI;
 using MissionPlanner.Warnings;
 
 namespace MissionPlanner.BSA.Tests
@@ -181,20 +182,153 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
-        public void Apply_PluginsAreNotInstalledUnlessOptedIn()
+        public void Apply_PluginsAreInstalledOnlyWhenRequested()
         {
             using (var f = PluginBundleFixture.Create())
             {
                 var installed = Path.Combine(f.PluginDirectory, "aero.bullshark.test.plugin.dll");
 
-                var withoutOptIn = f.Apply(new BsaBundleApplyOptions());
-                Assert.IsFalse(withoutOptIn.PluginsInstalled);
-                Assert.IsFalse(File.Exists(installed), "no plugin should be installed without an explicit yes");
+                var notRequested = f.Apply(new BsaBundleApplyOptions());
+                Assert.IsFalse(notRequested.PluginsInstalled);
+                Assert.IsFalse(File.Exists(installed));
 
                 f.Reset();
-                var withOptIn = f.Apply(new BsaBundleApplyOptions { InstallPlugins = true });
-                Assert.IsTrue(withOptIn.PluginsInstalled);
-                Assert.IsTrue(File.Exists(installed), "opting in should install the plugin");
+                var requested = f.Apply(new BsaBundleApplyOptions { InstallPlugins = true });
+                Assert.IsTrue(requested.PluginsInstalled);
+                Assert.IsTrue(File.Exists(installed));
+                CollectionAssert.AreEqual(new[] { "aero.bullshark.test.plugin" }, requested.PluginsWritten.ToList());
+            }
+        }
+
+        static readonly BsaBundleApplyOptions ManagePlugins =
+            new BsaBundleApplyOptions { InstallPlugins = true, RemoveUnlistedPlugins = true };
+
+        [TestMethod]
+        public void Apply_RemovesUnlistedPluginDlls_AndKeepsCsPluginsAndDependencies()
+        {
+            using (var f = PluginBundleFixture.Create())
+            {
+                var other = f.AddPluginFile("Other.dll", PluginBundleFixture.ManagedBytes());
+                var source = f.AddPluginFile("example.cs", System.Text.Encoding.UTF8.GetBytes("class Example {}"));
+                var dependency = f.AddPluginFile("Shared.dll", PluginBundleFixture.ManagedBytes());
+                File.WriteAllBytes(Path.Combine(f.Root, "Shared.dll"), PluginBundleFixture.ManagedBytes());
+                var framework = f.AddPluginFile("System.Extra.dll", PluginBundleFixture.ManagedBytes());
+
+                var result = f.Apply(ManagePlugins);
+
+                CollectionAssert.AreEqual(new[] { "Other.dll" }, result.PluginsRemoved.ToList());
+                Assert.IsFalse(File.Exists(other), "the unlisted plugin should be gone from the loader's view");
+                Assert.AreEqual(1, Directory.GetFiles(f.PluginDirectory, "Other.dll.bsa-*.aside").Length,
+                    "it should be parked until the restart, not deleted");
+                Assert.IsTrue(File.Exists(source), ".cs plugins ship with Mission Planner and stay");
+                Assert.IsTrue(File.Exists(dependency), "a DLL that also sits beside the exe is a dependency, not a plugin");
+                Assert.IsTrue(File.Exists(framework), "the loader never treats System.* as a plugin");
+                Assert.IsTrue(File.Exists(Path.Combine(f.PluginDirectory, "aero.bullshark.test.plugin.dll")));
+
+                var outcome = f.Commit().Single();
+
+                Assert.AreEqual(BsaTransactionStatus.Committed, outcome.Status);
+                Assert.AreEqual(0, Directory.GetFiles(f.PluginDirectory, "*.aside").Length,
+                    "the parked plugin is deleted once the import commits at start-up");
+            }
+        }
+
+        [TestMethod]
+        public void RestartRollback_PutsRemovedPluginsBack()
+        {
+            using (var f = PluginBundleFixture.Create())
+            {
+                var original = PluginBundleFixture.ManagedBytes();
+                var other = f.AddPluginFile("Other.dll", original);
+                f.Apply(ManagePlugins);
+                File.WriteAllText(Path.Combine(f.PluginDirectory, "aero.bullshark.test.plugin.dll"), "tampered");
+
+                var outcome = f.Commit().Single();
+
+                Assert.AreEqual(BsaTransactionStatus.RolledBack, outcome.Status);
+                CollectionAssert.AreEqual(original, File.ReadAllBytes(other));
+                Assert.IsFalse(File.Exists(Path.Combine(f.PluginDirectory, "aero.bullshark.test.plugin.dll")),
+                    "the bundle's plugin was not there before the import");
+                Assert.AreEqual(0, Directory.GetFiles(f.PluginDirectory, "*.aside").Length);
+            }
+        }
+
+        [TestMethod]
+        public void Apply_ReplacesAndRemovesPluginDllsThatAreLoaded()
+        {
+            using (var f = PluginBundleFixture.Create())
+            {
+                var oldVersion = f.AddPluginFile("aero.bullshark.test.plugin.dll", PluginBundleFixture.ManagedBytes());
+                var extra = f.AddPluginFile("Extra.dll", PluginBundleFixture.ManagedBytes());
+                System.Reflection.Assembly.LoadFile(oldVersion);
+                System.Reflection.Assembly.LoadFile(extra);
+                Assert.ThrowsException<UnauthorizedAccessException>(() => File.Delete(extra),
+                    "precondition: a loaded plugin DLL cannot be deleted");
+
+                var result = f.Apply(ManagePlugins);
+
+                Assert.AreEqual(BsaTransactionStatus.PendingRestart, result.Status);
+                CollectionAssert.AreEqual(f.Payload, File.ReadAllBytes(oldVersion), "the new version is in place");
+                Assert.IsFalse(File.Exists(extra));
+                CollectionAssert.AreEqual(new[] { "Extra.dll" }, result.PluginsRemoved.ToList());
+                Assert.AreEqual(BsaTransactionStatus.Committed, f.Commit().Single().Status);
+            }
+        }
+
+        [TestMethod]
+        public void Apply_LeavesAnIdenticalInstalledPluginUntouched()
+        {
+            using (var f = PluginBundleFixture.Create())
+            {
+                var installed = f.AddPluginFile("aero.bullshark.test.plugin.dll", f.Payload);
+                System.Reflection.Assembly.LoadFile(installed);
+
+                var result = f.Apply(ManagePlugins);
+
+                Assert.AreEqual(0, result.PluginsWritten.Count);
+                Assert.AreEqual(0, Directory.GetFiles(f.PluginDirectory, "*.aside").Length);
+                Assert.AreEqual(BsaTransactionStatus.Committed, f.Commit().Single().Status,
+                    "restart verification still checks the untouched plugin");
+            }
+        }
+
+        [TestMethod]
+        public void Reimport_WithAnUnlistedPluginPresent_RemovesIt()
+        {
+            using (var f = PluginBundleFixture.Create())
+            {
+                f.Apply(ManagePlugins);
+                f.Commit();
+                Assert.IsTrue(f.Apply(ManagePlugins).NoChangesRequired, "precondition: nothing extra, so already installed");
+
+                var extra = f.AddPluginFile("Extra.dll", PluginBundleFixture.ManagedBytes());
+                var again = f.Apply(ManagePlugins);
+
+                Assert.IsFalse(again.NoChangesRequired, "an unlisted plugin means the bundle is not fully installed");
+                Assert.IsFalse(File.Exists(extra));
+            }
+        }
+
+        [TestMethod]
+        public void PluginPlan_ListsWhatAnImportWillInstallAndRemove()
+        {
+            using (var f = PluginBundleFixture.Create())
+            {
+                f.AddPluginFile("Extra.dll", PluginBundleFixture.ManagedBytes());
+                f.AddPluginFile("example.cs", System.Text.Encoding.UTF8.GetBytes("class Example {}"));
+
+                var plan = BsaPluginFolder.Plan(f.Package, f.PluginDirectory);
+                CollectionAssert.AreEqual(new[] { "aero.bullshark.test.plugin" }, plan.Install.Select(p => p.PluginId).ToList());
+                CollectionAssert.AreEqual(new[] { "Extra.dll" }, plan.Remove);
+
+                f.AddPluginFile("aero.bullshark.test.plugin.dll", f.Payload);
+                plan = BsaPluginFolder.Plan(f.Package, f.PluginDirectory);
+                Assert.AreEqual(0, plan.Install.Count);
+                Assert.AreEqual(1, plan.AlreadyInstalled.Count);
+
+                var text = ImportWizardForm.PluginConfirmationText(plan);
+                StringAssert.Contains(text, "Remove: Extra.dll");
+                Assert.IsFalse(text.Contains("Install:"));
             }
         }
 
@@ -238,6 +372,8 @@ namespace MissionPlanner.BSA.Tests
             public string Root { get; private set; }
             public string PluginDirectory { get; private set; }
             public Dictionary<string, string> Live { get; private set; }
+            public byte[] Payload { get; private set; }
+            public ConfigPackageContents Package => _package;
             ConfigPackageContents _package;
             string _bundlePath, _bsa, _transactions, _warning, _settingsFile;
 
@@ -258,6 +394,7 @@ namespace MissionPlanner.BSA.Tests
                 Directory.CreateDirectory(f._bsa);
 
                 var payload = File.ReadAllBytes(typeof(BsaBundleTransactionTests).Assembly.Location);
+                f.Payload = payload;
                 using (var archive = System.IO.Compression.ZipFile.Open(f._bundlePath, System.IO.Compression.ZipArchiveMode.Create))
                 {
                     var entry = archive.CreateEntry("plugins/test.dll", System.IO.Compression.CompressionLevel.NoCompression);
@@ -297,10 +434,21 @@ namespace MissionPlanner.BSA.Tests
                     _bsa, _transactions, PluginDirectory, options, _settingsFile);
             }
 
-            public void Commit()
+            public IReadOnlyList<BsaRecoveryOutcome> Commit()
             {
                 Action save = () => File.WriteAllText(_settingsFile, string.Join(";", Live));
-                BsaBundleTransaction.RecoverAndVerify(_transactions, Live, save);
+                return BsaBundleTransaction.RecoverAndVerify(_transactions, Live, save);
+            }
+
+            public static byte[] ManagedBytes() =>
+                File.ReadAllBytes(typeof(Newtonsoft.Json.JsonConvert).Assembly.Location);
+
+            public string AddPluginFile(string name, byte[] bytes)
+            {
+                Directory.CreateDirectory(PluginDirectory);
+                var path = Path.Combine(PluginDirectory, name);
+                File.WriteAllBytes(path, bytes);
+                return path;
             }
 
             public void Reset()
@@ -327,7 +475,12 @@ namespace MissionPlanner.BSA.Tests
 
             public void Dispose()
             {
-                if (Directory.Exists(Root)) Directory.Delete(Root, true);
+                try
+                {
+                    if (Directory.Exists(Root)) Directory.Delete(Root, true);
+                }
+                catch (UnauthorizedAccessException) { }
+                catch (IOException) { }
             }
         }
 

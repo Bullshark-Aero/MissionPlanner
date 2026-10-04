@@ -178,6 +178,9 @@ namespace MissionPlanner.BSA.Config
             return changed;
         }
 
+        public static BsaPluginPlan PluginPlanFor(ConfigPackageContents package) =>
+            BsaPluginFolder.Plan(package, Path.Combine(Settings.GetRunningDirectory(), "plugins"));
+
         public static BsaBundleApplyResult ApplyBundleImport(ConfigPackageContents package,
             IEnumerable<string> approvedKeys, BsaBundleApplyOptions options)
         {

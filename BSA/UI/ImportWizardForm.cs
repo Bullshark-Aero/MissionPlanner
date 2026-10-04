@@ -197,8 +197,11 @@ namespace MissionPlanner.BSA.UI
             var profileDescription = package.HasCompleteCoreProfile
                 ? " and the complete typed operational profile"
                 : string.Empty;
+            var managesPlugins = !package.IsLegacy;
+            var pluginPlan = managesPlugins ? BsaConfigComposition.PluginPlanFor(package) : new BsaPluginPlan();
             if (CustomMessageBox.Show(
-                    $"This will back up every affected file, then apply {selected.Count} setting(s){profileDescription}. Continue?",
+                    $"This will back up every affected file, then apply {selected.Count} setting(s){profileDescription}." +
+                    PluginConfirmationText(pluginPlan) + "\n\nContinue?",
                     "Import MP Config", CustomMessageBox.MessageBoxButtons.YesNo) != CustomMessageBox.DialogResult.Yes)
                 return;
 
@@ -216,7 +219,8 @@ namespace MissionPlanner.BSA.UI
                         InstallLockPolicy = AskToInstallOptional(package.LockPolicyJson, "operational lock policy; it must be re-approved in Engineering Mode"),
                         InstallWarnings = AskToInstallOptional(package.WarningsXml,
                             "set of warning definitions; they REPLACE this machine's existing warnings rather than adding to them"),
-                        InstallPlugins = AskToInstallPlugins(package)
+                        InstallPlugins = managesPlugins,
+                        RemoveUnlistedPlugins = managesPlugins
                     });
                 _appliedKeys = new List<string>(applied.ChangedSettings);
                 _transactionDirectory = applied.TransactionDirectory;
@@ -247,6 +251,13 @@ namespace MissionPlanner.BSA.UI
                           $"Transaction and rollback data:\n{applied.TransactionDirectory}\n\n" +
                           $"A backup of your previous config was saved to:\n{backupPath}\n\n" +
                           "Restart Mission Planner to verify and commit the installation.";
+            var written = applied.PluginsWritten ?? new List<string>();
+            var removed = applied.PluginsRemoved ?? new List<string>();
+            if (written.Count > 0 || removed.Count > 0)
+                message += "\n\n" +
+                           (written.Count > 0 ? "Plugins installed: " + string.Join(", ", written) + "\n" : "") +
+                           (removed.Count > 0 ? "Plugins removed: " + string.Join(", ", removed) + "\n" : "") +
+                           "Plugin changes take effect after the restart.";
             if (applied.WarningsInstalled)
                 message += applied.WarningsReloadError == null
                     ? "\n\nThe imported warnings are already active - open the Warnings Manager to review them."
@@ -276,8 +287,8 @@ namespace MissionPlanner.BSA.UI
             foreach (var health in package.HealthRules?.Rules ?? new List<BsaHealthRule>())
                 lines.Add($"  Health: {health.OutputFieldId} <= {health.Kind}; freshness={health.FreshnessSeconds}s; grace={health.ArmedGraceSeconds}s");
             lines.Add(package.Plugins.Count == 0
-                ? "Data-only bundle; no executable code."
-                : "Contains executable code. Plugins are unsigned - installing them is a separate, explicit choice.");
+                ? "Data-only bundle; no executable code. Importing it removes any plugin DLLs on this ground station."
+                : "Contains executable code. Importing installs these plugins and removes any other plugin DLLs on this ground station. Plugins are unsigned: trust the bundle's source.");
             return string.Join("\n", lines) + "\n";
         }
 
@@ -288,20 +299,16 @@ namespace MissionPlanner.BSA.UI
                 "Import MP Config", CustomMessageBox.MessageBoxButtons.YesNo) == CustomMessageBox.DialogResult.Yes;
         }
 
-        static bool AskToInstallPlugins(ConfigPackageContents package)
+        public static string PluginConfirmationText(BsaPluginPlan plan)
         {
-            if (package.Plugins.Count == 0) return false;
-
-            var names = string.Join("\n", package.Plugins.Select(p =>
-                "  - " + p.PluginId + (string.IsNullOrWhiteSpace(p.Version) ? "" : " " + p.Version)));
-
-            return CustomMessageBox.Show(
-                       "This bundle contains " + package.Plugins.Count + " executable plugin(s):\n\n" + names +
-                       "\n\nA plugin is program code that Mission Planner runs at start-up, with the same " +
-                       "access to the aircraft as the rest of the application. Nothing verifies who produced " +
-                       "it - install it only if you trust where this bundle came from.\n\nInstall the plugin(s)?",
-                       "Import MP Config - executable code",
-                       CustomMessageBox.MessageBoxButtons.YesNo) == CustomMessageBox.DialogResult.Yes;
+            if (plan == null || !plan.ChangesAnything) return string.Empty;
+            var text = "\n\nPlugins (program code Mission Planner runs at start-up; changes take effect after the restart):";
+            if (plan.Install.Count > 0)
+                text += "\n  Install: " + string.Join(", ", plan.Install.Select(p =>
+                    p.PluginId + (string.IsNullOrWhiteSpace(p.Version) ? "" : " " + p.Version)));
+            if (plan.Remove.Count > 0)
+                text += "\n  Remove: " + string.Join(", ", plan.Remove);
+            return text;
         }
 
         /// <summary>
