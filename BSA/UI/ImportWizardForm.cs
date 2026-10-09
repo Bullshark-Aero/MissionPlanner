@@ -4,6 +4,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
+using MissionPlanner.BSA.Alerts;
 using MissionPlanner.BSA.Config;
 using MissionPlanner.Controls;
 
@@ -199,8 +200,11 @@ namespace MissionPlanner.BSA.UI
                 : string.Empty;
             var managesPlugins = !package.IsLegacy;
             var pluginPlan = managesPlugins ? BsaConfigComposition.PluginPlanFor(package) : new BsaPluginPlan();
+            var installsWarnings = managesPlugins && InstallsWarningsAutomatically(package);
+            var warningsPlan = installsWarnings ? BsaConfigComposition.WarningsPlanFor(package) : null;
             if (CustomMessageBox.Show(
                     $"This will back up every affected file, then apply {selected.Count} setting(s){profileDescription}." +
+                    HealthRuleMigration.Summary(warningsPlan, package.WarningsXml != null) +
                     PluginConfirmationText(pluginPlan) + "\n\nContinue?",
                     "Import MP Config", CustomMessageBox.MessageBoxButtons.YesNo) != CustomMessageBox.DialogResult.Yes)
                 return;
@@ -217,8 +221,10 @@ namespace MissionPlanner.BSA.UI
                         InstallChecklist = AskToInstallOptional(package.ChecklistJson, "preflight checklist"),
                         InstallKeyPolicy = AskToInstallOptional(package.KeyPolicyJson, "configuration key policy"),
                         InstallLockPolicy = AskToInstallOptional(package.LockPolicyJson, "operational lock policy; it must be re-approved in Engineering Mode"),
-                        InstallWarnings = AskToInstallOptional(package.WarningsXml,
-                            "set of warning definitions; they REPLACE this machine's existing warnings rather than adding to them"),
+                        InstallWarnings = managesPlugins
+                            ? installsWarnings
+                            : AskToInstallOptional(package.WarningsXml,
+                                "set of warning definitions; they REPLACE this machine's existing warnings rather than adding to them"),
                         InstallPlugins = managesPlugins,
                         RemoveUnlistedPlugins = managesPlugins
                     });
@@ -260,7 +266,7 @@ namespace MissionPlanner.BSA.UI
                            "Plugin changes take effect after the restart.";
             if (applied.WarningsInstalled)
                 message += applied.WarningsReloadError == null
-                    ? "\n\nThe imported warnings are already active - open the Warnings Manager to review them."
+                    ? "\n\nThe imported alerts and warnings are already active - review them under Config > BullShark > Aircraft Alerts and in the Warnings Manager."
                     : "\n\nThe warnings were written but could not be loaded into the running session (" +
                       applied.WarningsReloadError + "); they will take effect after the restart.";
             return message;
@@ -276,8 +282,8 @@ namespace MissionPlanner.BSA.UI
                 "\nBundle components:",
                 $"Quick panel: {package.QuickView?.Cells.Count ?? 0} cells",
                 $"Stable telemetry bindings: {package.TelemetryBindings?.Bindings.Count ?? 0}",
-                $"Warning definitions: {(package.WarningsXml != null ? "included - replaces this machine's set" : "none")}",
-                $"Health rules: {package.HealthRules?.Rules.Count ?? 0}",
+                $"Alerts and warnings: {(package.WarningsXml != null ? "included - replace this machine's set" : "none")}",
+                $"Health rules: {package.HealthRules?.Rules.Count ?? 0}{(package.HealthRules != null ? " - installed as aircraft alerts" : "")}",
                 $"Executable plugins: {package.Plugins.Count}"
             };
             foreach (var cell in package.QuickView?.Cells ?? new List<BsaQuickViewCell>())
@@ -298,6 +304,9 @@ namespace MissionPlanner.BSA.UI
                 "This bundle includes an optional " + description + ". Install it? The current file is included in the transaction backup.",
                 "Import MP Config", CustomMessageBox.MessageBoxButtons.YesNo) == CustomMessageBox.DialogResult.Yes;
         }
+
+        public static bool InstallsWarningsAutomatically(ConfigPackageContents package) =>
+            package != null && !package.IsLegacy && (package.WarningsXml != null || package.HealthRules != null);
 
         public static string PluginConfirmationText(BsaPluginPlan plan)
         {

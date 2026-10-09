@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using MissionPlanner.BSA.Alerts;
 using MissionPlanner.BSA.Config;
 using MissionPlanner.BSA.UI;
 using MissionPlanner.Warnings;
@@ -76,6 +77,65 @@ namespace MissionPlanner.BSA.Tests
             {
                 if (Directory.Exists(root)) Directory.Delete(root, true);
             }
+        }
+
+        static List<CustomWarning> ApplyWarnings(ConfigPackageContents package, string machineWarnings)
+        {
+            var root = Path.Combine(Path.GetTempPath(), "BsaBundleTransactionTests_" + Guid.NewGuid().ToString("N"));
+            var bsa = Path.Combine(root, "BSA", "config");
+            var transactions = Path.Combine(root, "BSA", "transactions");
+            var warning = Path.Combine(root, "warnings.xml");
+            var settingsFile = Path.Combine(root, "config.xml");
+            Directory.CreateDirectory(bsa);
+            if (machineWarnings != null) File.WriteAllText(warning, machineWarnings);
+            var live = new Dictionary<string, string> { ["distunits"] = "0" };
+            Action save = () => File.WriteAllText(settingsFile, string.Join(";", live));
+            try
+            {
+                var result = BsaBundleTransaction.Apply(package, live, new[] { "distunits" }, Policy(),
+                    save, warning, bsa, transactions, Path.Combine(root, "plugins"),
+                    new BsaBundleApplyOptions { InstallWarnings = true }, settingsFile);
+                Assert.IsTrue(result.WarningsInstalled);
+                return HealthRuleMigration.Parse(File.ReadAllText(warning));
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, true);
+            }
+        }
+
+        [TestMethod]
+        public void Apply_BundleWithHealthRules_InstallsItsWarningsWithTheHealthChecksAsAlerts()
+        {
+            var package = Package();
+            package.WarningsXml = HealthRuleMigration.Serialize(new[]
+            {
+                new CustomWarning { Name = "J26_DATA_OK", ConditionType = CustomWarning.Conditional.EQ, Text = "Judicar data lost" },
+                new CustomWarning { Name = "alt", ConditionType = CustomWarning.Conditional.GT, Warning = 120, Text = "high" }
+            });
+
+            var installed = ApplyWarnings(package, null);
+
+            CollectionAssert.AreEqual(new[] { "alt", "", "", "" }, installed.Select(w => w.Name).ToArray());
+            CollectionAssert.AreEqual(AlertPresets.HealthIds, installed.Skip(1).Select(w => w.Alert.Id).ToArray());
+        }
+
+        [TestMethod]
+        public void Apply_BundleWithHealthRulesButNoWarnings_KeepsTheMachinesWarnings()
+        {
+            var package = Package();
+            package.WarningsXml = null;
+            var machine = HealthRuleMigration.Serialize(new[]
+            {
+                new CustomWarning { Name = "J26_ESC_OK", ConditionType = CustomWarning.Conditional.EQ, Text = "ESC lost" },
+                new CustomWarning { Name = "battery_voltage", ConditionType = CustomWarning.Conditional.LT, Warning = 21, Text = "battery" }
+            });
+
+            var installed = ApplyWarnings(package, machine);
+
+            Assert.AreEqual("battery_voltage", installed[0].Name);
+            Assert.AreEqual(4, installed.Count);
+            Assert.IsFalse(installed.Any(w => w.Name == "J26_ESC_OK"));
         }
 
         [TestMethod]

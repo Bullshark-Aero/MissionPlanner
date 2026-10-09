@@ -181,6 +181,20 @@ namespace MissionPlanner.BSA.Config
         public static BsaPluginPlan PluginPlanFor(ConfigPackageContents package) =>
             BsaPluginFolder.Plan(package, Path.Combine(Settings.GetRunningDirectory(), "plugins"));
 
+        public static string WarningsPlanFor(ConfigPackageContents package)
+        {
+            try
+            {
+                var path = Warnings.WarningEngine.warningconfigfile;
+                var current = File.Exists(path) ? File.ReadAllText(path) : null;
+                return Alerts.HealthRuleMigration.WarningsToInstall(package, true, current);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         public static BsaBundleApplyResult ApplyBundleImport(ConfigPackageContents package,
             IEnumerable<string> approvedKeys, BsaBundleApplyOptions options)
         {

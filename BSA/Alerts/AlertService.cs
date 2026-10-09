@@ -259,6 +259,13 @@ namespace MissionPlanner.BSA.Alerts
             }
         }
 
+        public static IAlertTelemetry ConnectedTelemetry()
+        {
+            var port = MainV2.comPort;
+            var linkOpen = port?.BaseStream != null && port.BaseStream.IsOpen && !port.logreadmode;
+            return linkOpen ? CurrentTelemetry() : null;
+        }
+
         public static IAlertTelemetry CurrentTelemetry()
         {
             var service = _service;

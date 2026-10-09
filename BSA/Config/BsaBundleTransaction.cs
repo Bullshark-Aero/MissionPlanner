@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
+using MissionPlanner.BSA.Alerts;
 using MissionPlanner.BSA.Core;
 using Newtonsoft.Json;
 
@@ -95,11 +96,19 @@ namespace MissionPlanner.BSA.Config
             if (package.HasCompleteCoreProfile == false && !package.IsLegacy)
                 throw new InvalidDataException("A schema-v2 operational bundle must contain the complete core profile.");
 
+            if (options?.InstallWarnings == true && package.WarningsXml != null)
+                BsaConfigInstaller.EnsureParseableWarnings(package.WarningsXml);
+            var currentWarnings = !string.IsNullOrWhiteSpace(warningPath) && File.Exists(warningPath)
+                ? File.ReadAllText(warningPath)
+                : null;
+            var warningsXml = HealthRuleMigration.WarningsToInstall(package, options?.InstallWarnings == true, currentWarnings);
+
             var existing = FindCommittedInstallation(package, transactionsDirectory,
                 Path.Combine(Path.GetDirectoryName(bsaConfigDirectory), "install-state.json"), liveConfig);
             if (existing != null && (RequestedPluginsMissing(package, options, pluginDirectory) ||
                                      options?.RemoveUnlistedPlugins == true &&
-                                     BsaPluginFolder.Unlisted(package, pluginDirectory).Count > 0))
+                                     BsaPluginFolder.Unlisted(package, pluginDirectory).Count > 0 ||
+                                     HealthRuleMigration.WouldChange(warningsXml, currentWarnings)))
                 existing = null;
             if (existing != null)
                 return new BsaBundleApplyResult
@@ -144,11 +153,11 @@ namespace MissionPlanner.BSA.Config
             if (package.HealthRules != null)
                 targets[Path.Combine(bsaConfigDirectory, "active-health-rules.json")] = Utf8Json(package.HealthRules);
 
-            var warningsInstalled = options?.InstallWarnings == true && package.WarningsXml != null;
+            var warningsInstalled = warningsXml != null;
             if (warningsInstalled)
             {
-                BsaConfigInstaller.EnsureParseableWarnings(package.WarningsXml);
-                targets[warningPath] = Encoding.UTF8.GetBytes(package.WarningsXml);
+                BsaConfigInstaller.EnsureParseableWarnings(warningsXml);
+                targets[warningPath] = Encoding.UTF8.GetBytes(warningsXml);
             }
 
             var editableTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

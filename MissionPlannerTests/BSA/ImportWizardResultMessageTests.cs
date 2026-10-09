@@ -40,7 +40,7 @@ namespace MissionPlanner.BSA.Tests
 
             StringAssert.Contains(message, "Bundle staged successfully. 2 setting(s) changed.");
             StringAssert.Contains(message, "Restart Mission Planner to verify and commit the installation.");
-            StringAssert.Contains(message, "The imported warnings are already active");
+            StringAssert.Contains(message, "The imported alerts and warnings are already active");
             Assert.IsFalse(message.Contains("Plugins"), "no plugin line when no plugin changed");
         }
 

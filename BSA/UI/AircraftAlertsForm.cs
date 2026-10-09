@@ -43,12 +43,12 @@ namespace MissionPlanner.BSA.UI
 
         static readonly Choice[] TriggerChoices =
         {
-            new Choice { Text = "below", Value = CustomWarning.Conditional.LT },
-            new Choice { Text = "at or below", Value = CustomWarning.Conditional.LTEQ },
-            new Choice { Text = "equal to", Value = CustomWarning.Conditional.EQ },
-            new Choice { Text = "not equal to", Value = CustomWarning.Conditional.NEQ },
-            new Choice { Text = "at or above", Value = CustomWarning.Conditional.GTEQ },
-            new Choice { Text = "above", Value = CustomWarning.Conditional.GT },
+            ConditionChoice(CustomWarning.Conditional.LT),
+            ConditionChoice(CustomWarning.Conditional.LTEQ),
+            ConditionChoice(CustomWarning.Conditional.EQ),
+            ConditionChoice(CustomWarning.Conditional.NEQ),
+            ConditionChoice(CustomWarning.Conditional.GTEQ),
+            ConditionChoice(CustomWarning.Conditional.GT),
             new Choice { Text = "always", Value = TriggerAlways },
             new Choice { Text = "when the data stops", Value = TriggerOnStale }
         };
@@ -376,38 +376,14 @@ namespace MissionPlanner.BSA.UI
             return problems;
         }
 
-        public static string WatchLabel(AlertOptions alert)
-        {
-            var source = AlertSource.Parse(alert?.Source);
-            switch (source.Kind)
-            {
-                case AlertSourceKind.Field: return source.Name;
-                case AlertSourceKind.Named: return source.Name + " (named value)";
-                case AlertSourceKind.GpsFixCount: return "GPS receivers with a fix";
-                case AlertSourceKind.NamedFreshCount:
-                    return "Fresh named values (" + (alert.SourceNames?.Count ?? 0) + ")";
-                default: return "(nothing)";
-            }
-        }
+        public static string WatchLabel(AlertOptions alert) => AlertDescriptions.WatchLabel(alert);
 
         public static string WhenLabel(AlertOptions alert) =>
             PhaseChoices.First(c => (AlertPhase)c.Value == alert.Phase).Text;
 
-        public static string TriggerLabel(CustomWarning warning)
-        {
-            var alert = warning.Alert;
-            if (alert.TriggerOnStale) return "data stops for " + Seconds(AlertSourceResolver.FreshSecondsOf(alert));
-            var choice = TriggerChoices.FirstOrDefault(c => Equals(c.Value, warning.ConditionType));
-            var text = alert.Always
-                ? "always"
-                : choice == null
-                    ? "no trigger"
-                    : choice.Text + " " + warning.Warning.ToString("0.##", CultureInfo.InvariantCulture);
-            if (alert.HoldSeconds > 0) text += " for " + Seconds(alert.HoldSeconds);
-            return text;
-        }
+        public static string TriggerLabel(CustomWarning warning) => AlertDescriptions.TriggerLabel(warning);
 
-        public static string EveryLabel(CustomWarning warning) => Seconds(AlertEvaluator.RepeatSeconds(warning));
+        public static string EveryLabel(CustomWarning warning) => AlertDescriptions.Seconds(AlertEvaluator.RepeatSeconds(warning));
 
         public static string PreflightLabel(AlertOptions alert) =>
             alert.Preflight == AlertPreflight.None ? "-" : alert.Preflight.ToString();
@@ -828,6 +804,9 @@ namespace MissionPlanner.BSA.UI
             return combo;
         }
 
+        static Choice ConditionChoice(CustomWarning.Conditional condition) =>
+            new Choice { Text = AlertDescriptions.ConditionText(condition), Value = condition };
+
         static TextBox Box(int width) => new TextBox { Width = width };
 
         static Label Chip() => new Label
@@ -859,7 +838,5 @@ namespace MissionPlanner.BSA.UI
             panel.Controls.AddRange(controls);
             return panel;
         }
-
-        static string Seconds(double value) => value.ToString("0.#", CultureInfo.InvariantCulture) + " s";
     }
 }
