@@ -23,6 +23,9 @@ namespace MissionPlanner.Warnings
             {
                 foreach (var item in WarningEngine.warnings)
                 {
+                    if (item.Alert != null)
+                        continue;
+
                     var wrnctl = addwarningcontrol(5, y, item);
 
                     y = wrnctl.Bottom;
