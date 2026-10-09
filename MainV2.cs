@@ -4839,7 +4839,7 @@ namespace MissionPlanner
                     }
                     else
                     {
-                        qv.BackColor = Color.FromName(color);
+                        qv.BackColor = MissionPlanner.BSA.Alerts.AlertColours.ForQuickView(color);
                         // Ensure color is readable on the background
                         qv.numberColor = (((qv.BackColor.R + qv.BackColor.B + qv.BackColor.G) / 3) > 128)
                             ? Color.Black

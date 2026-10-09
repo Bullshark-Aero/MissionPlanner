@@ -87,6 +87,8 @@ namespace MissionPlanner.BSA.Alerts
         DateTime _lastSpokenUtc = DateTime.MinValue;
         bool _disposed;
 
+        public NamedValueTracker Tracker => _tracker;
+
         public AlertService()
         {
             _requester = new FlightPhaseRequester(sysId =>
@@ -255,6 +257,13 @@ namespace MissionPlanner.BSA.Alerts
                 Trace.TraceError("BSA alert service did not start: " + ex);
                 _service = null;
             }
+        }
+
+        public static IAlertTelemetry CurrentTelemetry()
+        {
+            var service = _service;
+            var port = MainV2.comPort;
+            return service == null || port == null ? null : new LiveAlertTelemetry(port, service.Tracker);
         }
 
         public static void Shutdown()
