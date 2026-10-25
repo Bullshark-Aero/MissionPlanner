@@ -199,6 +199,18 @@ namespace MissionPlanner.BSA.Config
             }
         }
 
+        public static string PendingImportMessage()
+        {
+            try
+            {
+                return BsaBundleTransaction.PendingRestartMessage(BsaBundleTransaction.FindPendingRestart(BsaPaths.TransactionsDirectory));
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         public static BsaBundleApplyResult ApplyBundleImport(ConfigPackageContents package,
             IEnumerable<string> approvedKeys, BsaBundleApplyOptions options)
         {

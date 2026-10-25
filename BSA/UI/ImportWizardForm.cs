@@ -172,6 +172,14 @@ namespace MissionPlanner.BSA.UI
 
         void OnApplyClicked()
         {
+            var pending = BsaConfigComposition.PendingImportMessage();
+            if (pending != null)
+            {
+                CustomMessageBox.Show(pending, "Import MP Config");
+                Close();
+                return;
+            }
+
             var selected = _diffPanel.GetSelectedKeys();
             var package = _validation.Package;
 

@@ -97,6 +97,8 @@ namespace MissionPlanner.BSA.Config
             if (saveSettings == null) throw new ArgumentNullException(nameof(saveSettings));
             if (package.HasCompleteCoreProfile == false && !package.IsLegacy)
                 throw new InvalidDataException("A schema-v2 operational bundle must contain the complete core profile.");
+            var pending = FindPendingRestart(transactionsDirectory);
+            if (pending != null) throw new InvalidOperationException(PendingRestartMessage(pending));
 
             if (options?.InstallWarnings == true && package.WarningsXml != null)
                 BsaConfigInstaller.EnsureParseableWarnings(package.WarningsXml);
@@ -330,22 +332,47 @@ namespace MissionPlanner.BSA.Config
                 return outcomes;
             }
 
+            var open = new List<KeyValuePair<string, BsaTransactionJournal>>();
             foreach (var journalPath in journalPaths)
             {
-                BsaTransactionJournal journal = null;
                 try
                 {
-                    journal = JsonConvert.DeserializeObject<BsaTransactionJournal>(File.ReadAllText(journalPath));
-                    if (journal == null) continue;
-                    if (journal.Status != BsaTransactionStatus.Applying && journal.Status != BsaTransactionStatus.PendingRestart)
-                        continue;
+                    var journal = JsonConvert.DeserializeObject<BsaTransactionJournal>(File.ReadAllText(journalPath));
+                    if (journal != null && IsOpen(journal))
+                        open.Add(new KeyValuePair<string, BsaTransactionJournal>(journalPath, journal));
+                }
+                catch (Exception ex)
+                {
+                    outcomes.Add(new BsaRecoveryOutcome
+                    {
+                        Failure = "Recovery could not complete: " + ex.Message,
+                        RecoveryFailed = true,
+                        JournalPath = journalPath
+                    });
+                }
+            }
 
+            var stacked = open.Count > 1;
+            foreach (var item in NewestFirst(open))
+            {
+                var journalPath = item.Key;
+                var journal = item.Value;
+                try
+                {
                     if (journal.Status == BsaTransactionStatus.Applying)
                     {
                         RestoreFiles(journal);
                         RestoreSettings(journal, liveConfig, saveSettings);
                         journal.Status = BsaTransactionStatus.RolledBack;
                         journal.Failure = "Recovered an interrupted apply at startup.";
+                        WriteJournal(Path.GetDirectoryName(journalPath), journal);
+                    }
+                    else if (stacked)
+                    {
+                        RestoreFiles(journal);
+                        RestoreSettings(journal, liveConfig, saveSettings);
+                        journal.Status = BsaTransactionStatus.RolledBack;
+                        journal.Failure = StackedImportsFailure;
                         WriteJournal(Path.GetDirectoryName(journalPath), journal);
                     }
                     else
@@ -397,6 +424,50 @@ namespace MissionPlanner.BSA.Config
             }
             return outcomes;
         }
+
+        public const string StackedImportsFailure =
+            "Another import was also waiting for a restart. Imports cannot be stacked, so all of them were undone " +
+            "and this machine is back to how it was before the first of them.";
+
+        public static BsaTransactionJournal FindPendingRestart(string transactionsDirectory)
+        {
+            if (string.IsNullOrWhiteSpace(transactionsDirectory) || !Directory.Exists(transactionsDirectory)) return null;
+            var open = new List<KeyValuePair<string, BsaTransactionJournal>>();
+            foreach (var journalPath in Directory.GetFiles(transactionsDirectory, JournalName, SearchOption.AllDirectories))
+            {
+                BsaTransactionJournal journal;
+                try
+                {
+                    journal = JsonConvert.DeserializeObject<BsaTransactionJournal>(File.ReadAllText(journalPath));
+                }
+                catch
+                {
+                    continue;
+                }
+                if (journal != null && IsOpen(journal))
+                    open.Add(new KeyValuePair<string, BsaTransactionJournal>(journalPath, journal));
+            }
+            return NewestFirst(open).Select(item => item.Value).FirstOrDefault();
+        }
+
+        public static string PendingRestartMessage(BsaTransactionJournal pending)
+        {
+            if (pending == null) return null;
+            var name = string.Join(" ", new[] { pending.PackageId, pending.PackageVersion }.Where(s => !string.IsNullOrWhiteSpace(s)));
+            return "An import staged at " + pending.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm") +
+                   (name.Length > 0 ? " (" + name + ")" : "") +
+                   " is still waiting for Mission Planner to restart.\n\n" +
+                   "Restart Mission Planner so that import can be verified, then import again. " +
+                   "Imports cannot be stacked: if several are waiting at start-up, all of them are undone.";
+        }
+
+        static bool IsOpen(BsaTransactionJournal journal) =>
+            journal.Status == BsaTransactionStatus.Applying || journal.Status == BsaTransactionStatus.PendingRestart;
+
+        static IEnumerable<KeyValuePair<string, BsaTransactionJournal>> NewestFirst(
+            IEnumerable<KeyValuePair<string, BsaTransactionJournal>> journals) =>
+            journals.OrderByDescending(item => item.Value.CreatedAtUtc)
+                .ThenByDescending(item => item.Value.TransactionId ?? "", StringComparer.Ordinal);
 
         static void RestoreSettings(BsaTransactionJournal journal, IDictionary<string, string> liveConfig, Action saveSettings)
         {

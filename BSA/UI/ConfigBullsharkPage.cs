@@ -178,8 +178,19 @@ namespace MissionPlanner.BSA.UI
 
         // ----- Import / Restore / Compare (moved from BSA/UI/ConfigActionsBar.cs) -----
 
+        static bool ImportWaitingForRestart(string caption)
+        {
+            var message = BsaConfigComposition.PendingImportMessage();
+            if (message == null) return false;
+            CustomMessageBox.Show(message, caption);
+            return true;
+        }
+
         void OnImportClicked()
         {
+            if (ImportWaitingForRestart("Import MP Config"))
+                return;
+
             using (var ofd = new OpenFileDialog { Title = "Import MP Config", Filter = "BSA MP Config (*.bsampconfig)|*.bsampconfig" })
             {
                 if (ofd.ShowDialog() != DialogResult.OK)
@@ -191,6 +202,9 @@ namespace MissionPlanner.BSA.UI
 
         void OnRestoreClicked()
         {
+            if (ImportWaitingForRestart("Restore Previous Config"))
+                return;
+
             var backupsDir = BsaPaths.BackupsDirectory;
             if (!Directory.Exists(backupsDir) || Directory.GetFiles(backupsDir, "*.bsampconfig").Length == 0)
             {

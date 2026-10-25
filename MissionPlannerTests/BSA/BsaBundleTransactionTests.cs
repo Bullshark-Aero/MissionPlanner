@@ -904,6 +904,7 @@ namespace MissionPlanner.BSA.Tests
 
                 Assert.IsFalse(fixture.Apply(PackageWithPresets(AlertPresets.EngineOut()), installPresets: false).AlertPresetsInstalled);
                 Assert.AreEqual(mine, File.ReadAllText(fixture.Presets));
+                BsaBundleTransaction.RecoverAndVerify(fixture.Transactions, fixture.Live, fixture.Save);
                 Assert.IsFalse(fixture.Apply(Package("other-hash")).AlertPresetsInstalled);
                 Assert.AreEqual(mine, File.ReadAllText(fixture.Presets));
             }
@@ -946,6 +947,85 @@ namespace MissionPlanner.BSA.Tests
 
                 Assert.IsFalse(repair.NoChangesRequired);
                 Assert.AreEqual("engine-out", AlertPresetStore.Load(fixture.Presets).Presets.Single().Alert.Id);
+            }
+        }
+
+        [TestMethod]
+        public void Apply_RefusesWhileAnEarlierImportWaitsForRestart()
+        {
+            using (var fixture = new PresetFixture())
+            {
+                var first = fixture.Apply(PackageWithPresets(AlertPresets.EngineOut()));
+                var presets = File.ReadAllText(fixture.Presets);
+                var installState = File.ReadAllText(Path.Combine(fixture.Root, "BSA", "install-state.json"));
+
+                var refused = Assert.ThrowsException<InvalidOperationException>(() =>
+                    fixture.Apply(PackageWithPresets(AlertPresets.AirspeedReadout())));
+
+                StringAssert.Contains(refused.Message, "still waiting for Mission Planner to restart");
+                Assert.AreEqual(1, Directory.GetDirectories(fixture.Transactions).Length);
+                Assert.AreEqual(presets, File.ReadAllText(fixture.Presets));
+                Assert.AreEqual(installState, File.ReadAllText(Path.Combine(fixture.Root, "BSA", "install-state.json")));
+                Assert.AreEqual(first.TransactionId, BsaBundleTransaction.FindPendingRestart(fixture.Transactions).TransactionId);
+
+                BsaBundleTransaction.RecoverAndVerify(fixture.Transactions, fixture.Live, fixture.Save);
+                Assert.IsNull(BsaBundleTransaction.FindPendingRestart(fixture.Transactions));
+                Assert.IsTrue(fixture.Apply(PackageWithPresets(AlertPresets.AirspeedReadout())).AlertPresetsInstalled);
+            }
+        }
+
+        [TestMethod]
+        public void Recovery_StackedImports_AreAllUndoneBackToBeforeTheFirst()
+        {
+            using (var fixture = new PresetFixture())
+            using (var second = new PresetFixture())
+            {
+                var original = AlertPresetStore.Serialize(new[] { AlertPresets.AirspeedReadout() });
+                File.WriteAllText(fixture.Presets, original);
+                File.WriteAllText(fixture.Warning, "original warnings");
+                var originalLive = new Dictionary<string, string>(fixture.Live);
+
+                var first = fixture.Apply(PackageWithPresets(AlertPresets.EngineOut()));
+                var afterFirst = File.ReadAllText(fixture.Presets);
+
+                var later = BsaBundleTransaction.Apply(PackageWithPresets(AlertPresets.EngineOut(), AlertPresets.AirspeedReadout()),
+                    fixture.Live, new[] { "distunits" }, Policy(), fixture.Save, fixture.Warning,
+                    fixture.Bsa, second.Transactions, Path.Combine(fixture.Root, "plugins"),
+                    new BsaBundleApplyOptions { InstallAlertPresets = true, InstallWarnings = true }, fixture.SettingsFile);
+                Assert.AreNotEqual("original warnings", File.ReadAllText(fixture.Warning));
+                var laterJournal = Newtonsoft.Json.JsonConvert.DeserializeObject<BsaTransactionJournal>(
+                    File.ReadAllText(Path.Combine(later.TransactionDirectory, "journal.json")));
+                laterJournal.CreatedAtUtc = DateTime.UtcNow.AddMinutes(1);
+                var stackedDirectory = Path.Combine(fixture.Transactions, later.TransactionId);
+                Directory.CreateDirectory(stackedDirectory);
+                File.WriteAllText(Path.Combine(stackedDirectory, "journal.json"), Newtonsoft.Json.JsonConvert.SerializeObject(laterJournal));
+                Assert.AreNotEqual(afterFirst, File.ReadAllText(fixture.Presets));
+
+                var outcomes = BsaBundleTransaction.RecoverAndVerify(fixture.Transactions, fixture.Live, fixture.Save);
+
+                Assert.AreEqual(2, outcomes.Count);
+                Assert.IsTrue(outcomes.All(o => o.RolledBack && !o.RecoveryFailed));
+                Assert.IsTrue(outcomes.All(o => o.Failure == BsaBundleTransaction.StackedImportsFailure));
+                Assert.AreEqual(later.TransactionId, outcomes[0].TransactionId, "the newest import is undone first");
+                Assert.AreEqual(first.TransactionId, outcomes[1].TransactionId);
+                Assert.AreEqual(original, File.ReadAllText(fixture.Presets));
+                Assert.AreEqual("original warnings", File.ReadAllText(fixture.Warning));
+                Assert.IsFalse(File.Exists(Path.Combine(fixture.Root, "BSA", "install-state.json")));
+                CollectionAssert.AreEquivalent(originalLive, fixture.Live);
+                Assert.IsNull(BsaBundleTransaction.FindPendingRestart(fixture.Transactions));
+            }
+        }
+
+        [TestMethod]
+        public void Recovery_SinglePendingImport_IsStillVerifiedAndCommitted()
+        {
+            using (var fixture = new PresetFixture())
+            {
+                fixture.Apply(PackageWithPresets(AlertPresets.EngineOut()));
+
+                var outcome = BsaBundleTransaction.RecoverAndVerify(fixture.Transactions, fixture.Live, fixture.Save).Single();
+
+                Assert.AreEqual(BsaTransactionStatus.Committed, outcome.Status, outcome.Failure);
             }
         }
     }

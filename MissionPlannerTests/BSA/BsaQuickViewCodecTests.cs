@@ -30,6 +30,22 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
+        public void Export_WithoutAStoredSize_UsesFlightDatasDefaultLayout()
+        {
+            var settings = new Dictionary<string, string> { ["quickView1"] = "groundspeed", ["quickView2"] = "alt" };
+
+            var profile = BsaQuickViewCodec.Export(settings, new Dictionary<string, string>());
+
+            Assert.AreEqual(3, profile.Rows);
+            Assert.AreEqual(2, profile.Columns);
+            Assert.AreEqual(6, profile.Cells.Count);
+            var target = new Dictionary<string, string>();
+            BsaQuickViewCodec.Apply(target, profile);
+            Assert.AreEqual("3", target["quickViewRows"]);
+            Assert.AreEqual("2", target["quickViewCols"]);
+        }
+
+        [TestMethod]
         public void Export_CarriesLabelMemory_ByStableFieldName()
         {
             var settings = new Dictionary<string, string>
