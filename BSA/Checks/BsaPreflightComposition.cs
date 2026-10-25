@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using MissionPlanner.BSA.Alerts;
 using MissionPlanner.BSA.Config;
 using MissionPlanner.BSA.Core;
 using MissionPlanner.Utilities;
+using MissionPlanner.Warnings;
 using Newtonsoft.Json;
 
 namespace MissionPlanner.BSA.Checks
@@ -134,12 +136,22 @@ namespace MissionPlanner.BSA.Checks
             var missionBaselineHash = MissionSanityChecks.HashWaypoints(ToLocationwps(MainV2.comPort.MAV.wps));
 
             var registry = BuildRegistry(missionBaselineHash);
+            var alerts = CurrentAlerts();
+            AlertPreflightCheck.Register(registry, alerts, AlertComposition.ConnectedTelemetry, () => DateTime.UtcNow);
             var checklistPath = ResolveChecklistPath();
             WarnIfSeededChecklistStale(checklistPath);
             var config = PreflightChecklistLoader.Load(checklistPath, registry.Keys);
+            var checks = AlertPreflightCheck.Append(config.Checks, config.Metadata, alerts);
             var evaluator = BuildEvaluator();
 
-            return BsaPreflightService.Instance.StartRun(config.Checks, evaluator, registry, operatorName, missionBaselineHash, config.Metadata);
+            return BsaPreflightService.Instance.StartRun(checks, evaluator, registry, operatorName, missionBaselineHash, config.Metadata);
+        }
+
+        static List<CustomWarning> CurrentAlerts()
+        {
+            var warnings = WarningEngine.warnings;
+            lock (warnings)
+                return AlertPreflightCheck.PreflightAlerts(warnings);
         }
     }
 }

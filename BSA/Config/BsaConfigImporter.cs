@@ -94,7 +94,7 @@ namespace MissionPlanner.BSA.Config
         public static bool HasInstallableFiles(ConfigPackageContents package) =>
             package != null &&
             (package.ChecklistJson != null || package.KeyPolicyJson != null ||
-             package.LockPolicyJson != null || package.WarningsXml != null ||
+             package.LockPolicyJson != null || package.WarningsXml != null || package.AlertPresetsJson != null ||
              package.HasCompleteCoreProfile);
 
         /// <summary>Exports the CURRENT live config as a timestamped backup - always call this before
@@ -102,7 +102,8 @@ namespace MissionPlanner.BSA.Config
         /// <returns>The backup file's full path.</returns>
         public static string Backup(string backupsDirectory, IReadOnlyDictionary<string, string> liveConfig,
             KeyPolicyConfig policy, string checklistJsonPath, string keyPolicyJsonPath, string lockPolicyJsonPathOrNull,
-            string warningsXmlPathOrNull, string missionPlannerVersion, string sourceDescription)
+            string warningsXmlPathOrNull, string missionPlannerVersion, string sourceDescription,
+            string alertPresetsJsonPathOrNull = null)
         {
             Directory.CreateDirectory(backupsDirectory);
             var path = Path.Combine(backupsDirectory, $"backup_{DateTime.UtcNow:yyyyMMdd_HHmmss}.bsampconfig");
@@ -111,7 +112,9 @@ namespace MissionPlanner.BSA.Config
                 warningsXmlPathOrNull,
                 version: "auto-backup", operatorName: "BSA Import (automatic backup)",
                 missionPlannerVersion: missionPlannerVersion,
-                releaseNotes: $"Automatic backup taken before importing '{sourceDescription}'.");
+                releaseNotes: $"Automatic backup taken before importing '{sourceDescription}'.",
+                profile: null, packageId: null, plugins: null,
+                alertPresetsJsonPathOrNull: alertPresetsJsonPathOrNull);
 
             return path;
         }

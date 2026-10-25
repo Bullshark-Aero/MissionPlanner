@@ -65,6 +65,11 @@ namespace MissionPlanner.Warnings
         //Nota bene: using Action is not elegant, but quick and since it used only one other place, no harm done
         public static event Action<string, string> QuickPanelColoring;
 
+        public static void RaiseQuickPanelColoring(string name, string color)
+        {
+            QuickPanelColoring?.Invoke(name, color);
+        }
+
         public static void Start(ISpeech speech)
         {
             if (run == false)
@@ -94,6 +99,9 @@ namespace MissionPlanner.Warnings
                     {
                         foreach (var item in warnings)
                         {
+                            if (item.Alert != null)
+                                continue;
+
                             // check primary condition
                             if (checkCond(item))
                             {

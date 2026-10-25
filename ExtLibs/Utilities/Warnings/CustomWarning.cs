@@ -16,6 +16,8 @@ namespace MissionPlanner.Warnings
 
         public CustomWarning Child = null;
 
+        public AlertOptions Alert { get; set; }
+
         public enum Conditional
         {
             NONE = 0,

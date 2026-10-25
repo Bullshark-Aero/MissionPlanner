@@ -15,6 +15,8 @@ namespace MissionPlanner.BSA.Config
         const string LabelMemoryPrefix = "quickViewLabel_";
         const int MaxLabelMemoryEntries = 500;
         const int MaxLabelLength = 100;
+        public const int DefaultRows = 3;
+        public const int DefaultColumns = 2;
         static readonly Regex SafeFieldName = new Regex("^[A-Za-z0-9_]{1,64}$");
 
         public static BsaQuickViewProfile Export(IReadOnlyDictionary<string, string> settings,
@@ -23,8 +25,8 @@ namespace MissionPlanner.BSA.Config
             if (settings == null) throw new ArgumentNullException(nameof(settings));
             if (customFieldNames == null) throw new ArgumentNullException(nameof(customFieldNames));
 
-            var rows = ReadPositiveInt(settings, "quickViewRows", 6);
-            var columns = ReadPositiveInt(settings, "quickViewCols", 5);
+            var rows = ReadPositiveInt(settings, "quickViewRows", DefaultRows);
+            var columns = ReadPositiveInt(settings, "quickViewCols", DefaultColumns);
             var profile = new BsaQuickViewProfile { Rows = rows, Columns = columns };
 
             for (var position = 1; position <= rows * columns; position++)

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using MissionPlanner.BSA.Alerts;
 using MissionPlanner.BSA.Config;
 using MissionPlanner.BSA.UI;
 using MissionPlanner.Warnings;
@@ -76,6 +77,65 @@ namespace MissionPlanner.BSA.Tests
             {
                 if (Directory.Exists(root)) Directory.Delete(root, true);
             }
+        }
+
+        static List<CustomWarning> ApplyWarnings(ConfigPackageContents package, string machineWarnings)
+        {
+            var root = Path.Combine(Path.GetTempPath(), "BsaBundleTransactionTests_" + Guid.NewGuid().ToString("N"));
+            var bsa = Path.Combine(root, "BSA", "config");
+            var transactions = Path.Combine(root, "BSA", "transactions");
+            var warning = Path.Combine(root, "warnings.xml");
+            var settingsFile = Path.Combine(root, "config.xml");
+            Directory.CreateDirectory(bsa);
+            if (machineWarnings != null) File.WriteAllText(warning, machineWarnings);
+            var live = new Dictionary<string, string> { ["distunits"] = "0" };
+            Action save = () => File.WriteAllText(settingsFile, string.Join(";", live));
+            try
+            {
+                var result = BsaBundleTransaction.Apply(package, live, new[] { "distunits" }, Policy(),
+                    save, warning, bsa, transactions, Path.Combine(root, "plugins"),
+                    new BsaBundleApplyOptions { InstallWarnings = true }, settingsFile);
+                Assert.IsTrue(result.WarningsInstalled);
+                return HealthRuleMigration.Parse(File.ReadAllText(warning));
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, true);
+            }
+        }
+
+        [TestMethod]
+        public void Apply_BundleWithHealthRules_InstallsItsWarningsWithTheHealthChecksAsAlerts()
+        {
+            var package = Package();
+            package.WarningsXml = HealthRuleMigration.Serialize(new[]
+            {
+                new CustomWarning { Name = "J26_DATA_OK", ConditionType = CustomWarning.Conditional.EQ, Text = "Judicar data lost" },
+                new CustomWarning { Name = "alt", ConditionType = CustomWarning.Conditional.GT, Warning = 120, Text = "high" }
+            });
+
+            var installed = ApplyWarnings(package, null);
+
+            CollectionAssert.AreEqual(new[] { "alt", "", "", "" }, installed.Select(w => w.Name).ToArray());
+            CollectionAssert.AreEqual(AlertPresets.HealthIds, installed.Skip(1).Select(w => w.Alert.Id).ToArray());
+        }
+
+        [TestMethod]
+        public void Apply_BundleWithHealthRulesButNoWarnings_KeepsTheMachinesWarnings()
+        {
+            var package = Package();
+            package.WarningsXml = null;
+            var machine = HealthRuleMigration.Serialize(new[]
+            {
+                new CustomWarning { Name = "J26_ESC_OK", ConditionType = CustomWarning.Conditional.EQ, Text = "ESC lost" },
+                new CustomWarning { Name = "battery_voltage", ConditionType = CustomWarning.Conditional.LT, Warning = 21, Text = "battery" }
+            });
+
+            var installed = ApplyWarnings(package, machine);
+
+            Assert.AreEqual("battery_voltage", installed[0].Name);
+            Assert.AreEqual(4, installed.Count);
+            Assert.IsFalse(installed.Any(w => w.Name == "J26_ESC_OK"));
         }
 
         [TestMethod]
@@ -772,6 +832,200 @@ namespace MissionPlanner.BSA.Tests
             finally
             {
                 if (Directory.Exists(root)) Directory.Delete(root, true);
+            }
+        }
+
+        sealed class PresetFixture : IDisposable
+        {
+            public readonly string Root = Path.Combine(Path.GetTempPath(), "BsaBundleTransactionTests_" + Guid.NewGuid().ToString("N"));
+            public string Bsa => Path.Combine(Root, "BSA", "config");
+            public string Transactions => Path.Combine(Root, "BSA", "transactions");
+            public string Warning => Path.Combine(Root, "warnings.xml");
+            public string SettingsFile => Path.Combine(Root, "config.xml");
+            public string Presets => Path.Combine(Bsa, "alert_presets.json");
+            public readonly Dictionary<string, string> Live = new Dictionary<string, string> { ["distunits"] = "0" };
+            public readonly Action Save;
+
+            public PresetFixture()
+            {
+                Directory.CreateDirectory(Bsa);
+                Save = () => File.WriteAllText(SettingsFile, string.Join(";", Live));
+            }
+
+            public BsaBundleApplyResult Apply(ConfigPackageContents package, bool installPresets = true, Action<string> checkpoint = null) =>
+                BsaBundleTransaction.Apply(package, Live, new[] { "distunits" }, Policy(), Save, Warning,
+                    Bsa, Transactions, Path.Combine(Root, "plugins"),
+                    new BsaBundleApplyOptions { InstallAlertPresets = installPresets }, SettingsFile, checkpoint);
+
+            public void Dispose()
+            {
+                if (Directory.Exists(Root)) Directory.Delete(Root, true);
+            }
+        }
+
+        static ConfigPackageContents PackageWithPresets(params CustomWarning[] presets)
+        {
+            var package = Package();
+            package.AlertPresetsJson = AlertPresetStore.Serialize(presets);
+            return package;
+        }
+
+        [TestMethod]
+        public void Apply_InstallsAlertPresetsAsAnEditableFile()
+        {
+            using (var fixture = new PresetFixture())
+            {
+                File.WriteAllText(fixture.Presets, AlertPresetStore.Serialize(new[] { AlertPresets.AirspeedReadout() }));
+
+                var result = fixture.Apply(PackageWithPresets(AlertPresets.EngineOut()));
+
+                Assert.IsTrue(result.AlertPresetsInstalled);
+                Assert.AreEqual("engine-out", AlertPresetStore.Load(fixture.Presets).Presets.Single().Alert.Id);
+
+                AlertPresetStore.Save(fixture.Presets, AlertPresets.All());
+                BsaBundleTransaction.RecoverAndVerify(fixture.Transactions, fixture.Live, fixture.Save);
+
+                var journal = Newtonsoft.Json.JsonConvert.DeserializeObject<BsaTransactionJournal>(
+                    File.ReadAllText(Path.Combine(result.TransactionDirectory, "journal.json")));
+                Assert.AreEqual(BsaTransactionStatus.Committed, journal.Status, journal.Failure);
+                CollectionAssert.Contains(journal.EditableTargets, fixture.Presets);
+                Assert.IsFalse(journal.ExpectedHashes.ContainsKey(fixture.Presets));
+                Assert.AreEqual(5, AlertPresetStore.Load(fixture.Presets).Presets.Count);
+            }
+        }
+
+        [TestMethod]
+        public void Apply_LeavesThePresetsAloneWhenNotAskedOrNotCarried()
+        {
+            using (var fixture = new PresetFixture())
+            {
+                var mine = AlertPresetStore.Serialize(new[] { AlertPresets.AirspeedReadout() });
+                File.WriteAllText(fixture.Presets, mine);
+
+                Assert.IsFalse(fixture.Apply(PackageWithPresets(AlertPresets.EngineOut()), installPresets: false).AlertPresetsInstalled);
+                Assert.AreEqual(mine, File.ReadAllText(fixture.Presets));
+                BsaBundleTransaction.RecoverAndVerify(fixture.Transactions, fixture.Live, fixture.Save);
+                Assert.IsFalse(fixture.Apply(Package("other-hash")).AlertPresetsInstalled);
+                Assert.AreEqual(mine, File.ReadAllText(fixture.Presets));
+            }
+        }
+
+        [TestMethod]
+        public void Apply_FailureRestoresTheMachinesPresets()
+        {
+            using (var fixture = new PresetFixture())
+            {
+                var mine = AlertPresetStore.Serialize(new[] { AlertPresets.AirspeedReadout() });
+                File.WriteAllText(fixture.Presets, mine);
+                var package = PackageWithPresets(AlertPresets.EngineOut());
+
+                Assert.ThrowsException<InvalidOperationException>(() => fixture.Apply(package, checkpoint: point =>
+                {
+                    if (point.StartsWith("file-committed") && File.ReadAllText(fixture.Presets) == package.AlertPresetsJson)
+                        throw new IOException("injected failure after the presets were written");
+                }));
+
+                Assert.AreEqual(mine, File.ReadAllText(fixture.Presets));
+            }
+        }
+
+        [TestMethod]
+        public void Reimport_AfterPresetDrift_PutsTheBundlesPresetsBack()
+        {
+            using (var fixture = new PresetFixture())
+            {
+                var package = PackageWithPresets(AlertPresets.EngineOut());
+                var first = fixture.Apply(package);
+                BsaBundleTransaction.RecoverAndVerify(fixture.Transactions, fixture.Live, fixture.Save);
+
+                var unchanged = fixture.Apply(package);
+                Assert.IsTrue(unchanged.NoChangesRequired);
+                Assert.AreEqual(first.TransactionId, unchanged.TransactionId);
+
+                AlertPresetStore.Save(fixture.Presets, new CustomWarning[0]);
+                var repair = fixture.Apply(package);
+
+                Assert.IsFalse(repair.NoChangesRequired);
+                Assert.AreEqual("engine-out", AlertPresetStore.Load(fixture.Presets).Presets.Single().Alert.Id);
+            }
+        }
+
+        [TestMethod]
+        public void Apply_RefusesWhileAnEarlierImportWaitsForRestart()
+        {
+            using (var fixture = new PresetFixture())
+            {
+                var first = fixture.Apply(PackageWithPresets(AlertPresets.EngineOut()));
+                var presets = File.ReadAllText(fixture.Presets);
+                var installState = File.ReadAllText(Path.Combine(fixture.Root, "BSA", "install-state.json"));
+
+                var refused = Assert.ThrowsException<InvalidOperationException>(() =>
+                    fixture.Apply(PackageWithPresets(AlertPresets.AirspeedReadout())));
+
+                StringAssert.Contains(refused.Message, "still waiting for Mission Planner to restart");
+                Assert.AreEqual(1, Directory.GetDirectories(fixture.Transactions).Length);
+                Assert.AreEqual(presets, File.ReadAllText(fixture.Presets));
+                Assert.AreEqual(installState, File.ReadAllText(Path.Combine(fixture.Root, "BSA", "install-state.json")));
+                Assert.AreEqual(first.TransactionId, BsaBundleTransaction.FindPendingRestart(fixture.Transactions).TransactionId);
+
+                BsaBundleTransaction.RecoverAndVerify(fixture.Transactions, fixture.Live, fixture.Save);
+                Assert.IsNull(BsaBundleTransaction.FindPendingRestart(fixture.Transactions));
+                Assert.IsTrue(fixture.Apply(PackageWithPresets(AlertPresets.AirspeedReadout())).AlertPresetsInstalled);
+            }
+        }
+
+        [TestMethod]
+        public void Recovery_StackedImports_AreAllUndoneBackToBeforeTheFirst()
+        {
+            using (var fixture = new PresetFixture())
+            using (var second = new PresetFixture())
+            {
+                var original = AlertPresetStore.Serialize(new[] { AlertPresets.AirspeedReadout() });
+                File.WriteAllText(fixture.Presets, original);
+                File.WriteAllText(fixture.Warning, "original warnings");
+                var originalLive = new Dictionary<string, string>(fixture.Live);
+
+                var first = fixture.Apply(PackageWithPresets(AlertPresets.EngineOut()));
+                var afterFirst = File.ReadAllText(fixture.Presets);
+
+                var later = BsaBundleTransaction.Apply(PackageWithPresets(AlertPresets.EngineOut(), AlertPresets.AirspeedReadout()),
+                    fixture.Live, new[] { "distunits" }, Policy(), fixture.Save, fixture.Warning,
+                    fixture.Bsa, second.Transactions, Path.Combine(fixture.Root, "plugins"),
+                    new BsaBundleApplyOptions { InstallAlertPresets = true, InstallWarnings = true }, fixture.SettingsFile);
+                Assert.AreNotEqual("original warnings", File.ReadAllText(fixture.Warning));
+                var laterJournal = Newtonsoft.Json.JsonConvert.DeserializeObject<BsaTransactionJournal>(
+                    File.ReadAllText(Path.Combine(later.TransactionDirectory, "journal.json")));
+                laterJournal.CreatedAtUtc = DateTime.UtcNow.AddMinutes(1);
+                var stackedDirectory = Path.Combine(fixture.Transactions, later.TransactionId);
+                Directory.CreateDirectory(stackedDirectory);
+                File.WriteAllText(Path.Combine(stackedDirectory, "journal.json"), Newtonsoft.Json.JsonConvert.SerializeObject(laterJournal));
+                Assert.AreNotEqual(afterFirst, File.ReadAllText(fixture.Presets));
+
+                var outcomes = BsaBundleTransaction.RecoverAndVerify(fixture.Transactions, fixture.Live, fixture.Save);
+
+                Assert.AreEqual(2, outcomes.Count);
+                Assert.IsTrue(outcomes.All(o => o.RolledBack && !o.RecoveryFailed));
+                Assert.IsTrue(outcomes.All(o => o.Failure == BsaBundleTransaction.StackedImportsFailure));
+                Assert.AreEqual(later.TransactionId, outcomes[0].TransactionId, "the newest import is undone first");
+                Assert.AreEqual(first.TransactionId, outcomes[1].TransactionId);
+                Assert.AreEqual(original, File.ReadAllText(fixture.Presets));
+                Assert.AreEqual("original warnings", File.ReadAllText(fixture.Warning));
+                Assert.IsFalse(File.Exists(Path.Combine(fixture.Root, "BSA", "install-state.json")));
+                CollectionAssert.AreEquivalent(originalLive, fixture.Live);
+                Assert.IsNull(BsaBundleTransaction.FindPendingRestart(fixture.Transactions));
+            }
+        }
+
+        [TestMethod]
+        public void Recovery_SinglePendingImport_IsStillVerifiedAndCommitted()
+        {
+            using (var fixture = new PresetFixture())
+            {
+                fixture.Apply(PackageWithPresets(AlertPresets.EngineOut()));
+
+                var outcome = BsaBundleTransaction.RecoverAndVerify(fixture.Transactions, fixture.Live, fixture.Save).Single();
+
+                Assert.AreEqual(BsaTransactionStatus.Committed, outcome.Status, outcome.Failure);
             }
         }
     }

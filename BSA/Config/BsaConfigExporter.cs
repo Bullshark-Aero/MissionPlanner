@@ -25,7 +25,8 @@ namespace MissionPlanner.BSA.Config
             KeyPolicyConfig policy, string checklistJsonPath, string keyPolicyJsonPath, string lockPolicyJsonPathOrNull,
             string warningsXmlPathOrNull,
             string version, string operatorName, string missionPlannerVersion, string releaseNotes,
-            BsaBundleProfile profile, string packageId, IReadOnlyList<BsaPluginExport> plugins = null)
+            BsaBundleProfile profile, string packageId, IReadOnlyList<BsaPluginExport> plugins = null,
+            string alertPresetsJsonPathOrNull = null)
         {
             if (liveConfig == null) throw new ArgumentNullException(nameof(liveConfig));
             if (policy == null) throw new ArgumentNullException(nameof(policy));
@@ -54,10 +55,11 @@ namespace MissionPlanner.BSA.Config
             return profile == null
                 ? BsaConfigPackage.WriteLegacy(outputPath, subset, checklistJsonPath, keyPolicyJsonPath,
                     lockPolicyJsonPathOrNull, warningsXmlPathOrNull,
-                    version, operatorName, missionPlannerVersion, releaseNotes)
+                    version, operatorName, missionPlannerVersion, releaseNotes, alertPresetsJsonPathOrNull)
                 : BsaConfigPackage.Write(outputPath, subset, checklistJsonPath, keyPolicyJsonPath,
                     lockPolicyJsonPathOrNull, warningsXmlPathOrNull,
-                    version, operatorName, missionPlannerVersion, releaseNotes, profile, packageId, plugins);
+                    version, operatorName, missionPlannerVersion, releaseNotes, profile, packageId, plugins,
+                    alertPresetsJsonPathOrNull);
         }
     }
 }

@@ -3114,6 +3114,14 @@ namespace MissionPlanner.GCSViews
             if (Settings.Instance["CHK_autopan"] != null)
                 CHK_autopan.Checked = Settings.Instance.GetBoolean("CHK_autopan");
 
+            panel1.Controls.Add(new SpeechIndicator
+            {
+                Name = "BSA_speechIndicator",
+                Location = new Point(CHK_autopan.Right + 6, CHK_autopan.Top),
+                Height = CHK_autopan.Height,
+                Anchor = CHK_autopan.Anchor
+            });
+
             if (Settings.Instance.ContainsKey("HudSwap") && Settings.Instance["HudSwap"] == "true")
                 SwapHud1AndMap();
 

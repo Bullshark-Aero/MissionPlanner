@@ -1048,6 +1048,7 @@ namespace MissionPlanner
             Warnings.WarningEngine.Start(speechEnable ? speechEngine : null);
             Warnings.WarningEngine.WarningMessage += (sender, s) => { MainV2.comPort.MAV.cs.messageHigh = s; };
             Warnings.WarningEngine.QuickPanelColoring += WarningEngine_QuickPanelColoring;
+            MissionPlanner.BSA.Alerts.AlertComposition.Initialize();
 
             if (CurrentState.rateattitudebackup == 0) // initilised to 10, configured above from save
             {
@@ -2018,6 +2019,7 @@ namespace MissionPlanner
             base.OnClosing(e);
 
             log.Info("MainV2_FormClosing");
+            MissionPlanner.BSA.Alerts.AlertComposition.Shutdown();
             MissionPlanner.BSA.Telemetry.JudicarHealthComposition.Shutdown();
 
             log.Info("GMaps write cache");
@@ -4837,7 +4839,7 @@ namespace MissionPlanner
                     }
                     else
                     {
-                        qv.BackColor = Color.FromName(color);
+                        qv.BackColor = MissionPlanner.BSA.Alerts.AlertColours.ForQuickView(color);
                         // Ensure color is readable on the background
                         qv.numberColor = (((qv.BackColor.R + qv.BackColor.B + qv.BackColor.G) / 3) > 128)
                             ? Color.Black

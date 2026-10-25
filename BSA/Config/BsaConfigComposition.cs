@@ -48,6 +48,8 @@ namespace MissionPlanner.BSA.Config
             return File.Exists(path) ? path : null;
         }
 
+        static string AlertPresetsPathIfPresent() => File.Exists(BsaPaths.AlertPresetsPath) ? BsaPaths.AlertPresetsPath : null;
+
         static string WarningsXmlPathIfPresent()
         {
             var path = Path.Combine(Settings.GetUserDataDirectory(), WarningsFileName);
@@ -122,7 +124,8 @@ namespace MissionPlanner.BSA.Config
                 releaseNotes,
                 profile,
                 option.PackageId,
-                plugins);
+                plugins,
+                AlertPresetsPathIfPresent());
         }
 
         // ----- WP2 Phase B: import -----
@@ -152,7 +155,8 @@ namespace MissionPlanner.BSA.Config
                 LockPolicyPathIfPresent(),
                 WarningsXmlPathIfPresent(),
                 Application.ProductVersion,
-                sourceDescription);
+                sourceDescription,
+                AlertPresetsPathIfPresent());
         }
 
         /// <summary>Applies approved keys to the real live Settings.config and persists via a
@@ -180,6 +184,32 @@ namespace MissionPlanner.BSA.Config
 
         public static BsaPluginPlan PluginPlanFor(ConfigPackageContents package) =>
             BsaPluginFolder.Plan(package, Path.Combine(Settings.GetRunningDirectory(), "plugins"));
+
+        public static string WarningsPlanFor(ConfigPackageContents package)
+        {
+            try
+            {
+                var path = Warnings.WarningEngine.warningconfigfile;
+                var current = File.Exists(path) ? File.ReadAllText(path) : null;
+                return Alerts.HealthRuleMigration.WarningsToInstall(package, true, current);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        public static string PendingImportMessage()
+        {
+            try
+            {
+                return BsaBundleTransaction.PendingRestartMessage(BsaBundleTransaction.FindPendingRestart(BsaPaths.TransactionsDirectory));
+            }
+            catch
+            {
+                return null;
+            }
+        }
 
         public static BsaBundleApplyResult ApplyBundleImport(ConfigPackageContents package,
             IEnumerable<string> approvedKeys, BsaBundleApplyOptions options)
@@ -254,7 +284,7 @@ namespace MissionPlanner.BSA.Config
             bool installChecklist, bool installKeyPolicy, bool installLockPolicy, bool installWarnings)
         {
             var result = BsaConfigInstaller.Install(package, BsaPaths.ConfigDirectory, Settings.GetUserDataDirectory(),
-                installChecklist, installKeyPolicy, installLockPolicy, installWarnings);
+                installChecklist, installKeyPolicy, installLockPolicy, installWarnings, installWarnings);
 
             // The other files are read at startup and a restart is enough. warnings.xml is not.
             if (result.InstalledFiles.Contains(BsaConfigInstaller.WarningsFileName))

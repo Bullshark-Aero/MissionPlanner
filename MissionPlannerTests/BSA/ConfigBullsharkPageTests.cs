@@ -9,7 +9,7 @@ namespace MissionPlanner.BSA.Tests
 {
     /// <summary>
     /// The page is the single entry point for every BSA config action, so the thing worth guarding is
-    /// that constructing it stays free of MP globals (no MainV2.comPort / Settings) and that all six
+    /// that constructing it stays free of MP globals (no MainV2.comPort / Settings) and that all seven
     /// actions are actually wired up. The click handlers themselves need a live MP process and stay
     /// uncovered, exactly as they were before the move.
     /// </summary>
@@ -35,7 +35,7 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
-        public void Page_ExposesAllSixConfigActions()
+        public void Page_ExposesEveryConfigAction()
         {
             using (var page = new ConfigBullsharkPage())
             {
@@ -49,7 +49,8 @@ namespace MissionPlanner.BSA.Tests
                         "Compare to Package...",
                         "Export MP Config",
                         "Change Passphrase...",
-                        "Edit Lock Policy..."
+                        "Edit Lock Policy...",
+                        "Aircraft Alerts..."
                     },
                     buttonTexts);
             }
@@ -74,7 +75,7 @@ namespace MissionPlanner.BSA.Tests
                 var groupTitles = Sections(page).Select(SectionTitle).ToList();
 
                 CollectionAssert.AreEquivalent(
-                    new[] { "Approved Configuration", "Authoring & Engineering" },
+                    new[] { "Approved Configuration", "Aircraft Alerts", "Authoring & Engineering" },
                     groupTitles);
             }
         }
@@ -99,7 +100,7 @@ namespace MissionPlanner.BSA.Tests
                 form.PerformLayout();
 
                 var sections = Sections(page).OrderBy(s => s.Top).ToList();
-                Assert.AreEqual(2, sections.Count);
+                Assert.AreEqual(3, sections.Count);
 
                 foreach (var section in sections)
                 {
@@ -107,8 +108,9 @@ namespace MissionPlanner.BSA.Tests
                     Assert.IsTrue(section.Width > 200, $"'{SectionTitle(section)}' collapsed to {section.Width}px wide.");
                 }
 
-                Assert.IsTrue(sections[0].Bottom <= sections[1].Top,
-                    "The two sections overlap vertically.");
+                for (var i = 1; i < sections.Count; i++)
+                    Assert.IsTrue(sections[i - 1].Bottom <= sections[i].Top,
+                        $"'{SectionTitle(sections[i - 1])}' overlaps '{SectionTitle(sections[i])}' vertically.");
             }
         }
 

@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
+using MissionPlanner.BSA.Alerts;
 using MissionPlanner.BSA.Core;
 using Newtonsoft.Json;
 
@@ -47,6 +48,7 @@ namespace MissionPlanner.BSA.Config
         public bool InstallKeyPolicy { get; set; }
         public bool InstallLockPolicy { get; set; }
         public bool InstallWarnings { get; set; }
+        public bool InstallAlertPresets { get; set; }
         public bool InstallPlugins { get; set; }
         public bool RemoveUnlistedPlugins { get; set; }
     }
@@ -60,6 +62,7 @@ namespace MissionPlanner.BSA.Config
         public bool RestartRequired { get; set; }
         public bool NoChangesRequired { get; set; }
         public bool WarningsInstalled { get; set; }
+        public bool AlertPresetsInstalled { get; set; }
         public bool PluginsInstalled { get; set; }
         public IReadOnlyList<string> PluginsWritten { get; set; } = new List<string>();
         public IReadOnlyList<string> PluginsRemoved { get; set; } = new List<string>();
@@ -94,12 +97,28 @@ namespace MissionPlanner.BSA.Config
             if (saveSettings == null) throw new ArgumentNullException(nameof(saveSettings));
             if (package.HasCompleteCoreProfile == false && !package.IsLegacy)
                 throw new InvalidDataException("A schema-v2 operational bundle must contain the complete core profile.");
+            var pending = FindPendingRestart(transactionsDirectory);
+            if (pending != null) throw new InvalidOperationException(PendingRestartMessage(pending));
+
+            if (options?.InstallWarnings == true && package.WarningsXml != null)
+                BsaConfigInstaller.EnsureParseableWarnings(package.WarningsXml);
+            var currentWarnings = !string.IsNullOrWhiteSpace(warningPath) && File.Exists(warningPath)
+                ? File.ReadAllText(warningPath)
+                : null;
+            var warningsXml = HealthRuleMigration.WarningsToInstall(package, options?.InstallWarnings == true, currentWarnings);
+            var presetsPath = Path.Combine(bsaConfigDirectory, BsaPaths.AlertPresetsFileName);
+            var presetsInstalled = options?.InstallAlertPresets == true && package.AlertPresetsJson != null;
+            if (presetsInstalled) AlertPresetStore.Parse(package.AlertPresetsJson);
+            var presetsDiffer = presetsInstalled && !AlertPresetStore.SameContent(package.AlertPresetsJson,
+                File.Exists(presetsPath) ? File.ReadAllText(presetsPath) : null);
 
             var existing = FindCommittedInstallation(package, transactionsDirectory,
                 Path.Combine(Path.GetDirectoryName(bsaConfigDirectory), "install-state.json"), liveConfig);
             if (existing != null && (RequestedPluginsMissing(package, options, pluginDirectory) ||
                                      options?.RemoveUnlistedPlugins == true &&
-                                     BsaPluginFolder.Unlisted(package, pluginDirectory).Count > 0))
+                                     BsaPluginFolder.Unlisted(package, pluginDirectory).Count > 0 ||
+                                     HealthRuleMigration.WouldChange(warningsXml, currentWarnings) ||
+                                     presetsDiffer))
                 existing = null;
             if (existing != null)
                 return new BsaBundleApplyResult
@@ -144,15 +163,20 @@ namespace MissionPlanner.BSA.Config
             if (package.HealthRules != null)
                 targets[Path.Combine(bsaConfigDirectory, "active-health-rules.json")] = Utf8Json(package.HealthRules);
 
-            var warningsInstalled = options?.InstallWarnings == true && package.WarningsXml != null;
+            var warningsInstalled = warningsXml != null;
             if (warningsInstalled)
             {
-                BsaConfigInstaller.EnsureParseableWarnings(package.WarningsXml);
-                targets[warningPath] = Encoding.UTF8.GetBytes(package.WarningsXml);
+                BsaConfigInstaller.EnsureParseableWarnings(warningsXml);
+                targets[warningPath] = Encoding.UTF8.GetBytes(warningsXml);
             }
 
             var editableTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (warningsInstalled) editableTargets.Add(warningPath);
+            if (presetsInstalled)
+            {
+                targets[presetsPath] = Encoding.UTF8.GetBytes(package.AlertPresetsJson);
+                editableTargets.Add(presetsPath);
+            }
             AddOptionalTarget(targets, package.ChecklistJson, options?.InstallChecklist == true,
                 Path.Combine(bsaConfigDirectory, BsaConfigInstaller.ChecklistFileName));
             AddOptionalTarget(targets, package.KeyPolicyJson, options?.InstallKeyPolicy == true,
@@ -267,6 +291,7 @@ namespace MissionPlanner.BSA.Config
                     Status = journal.Status,
                     ChangedSettings = changed,
                     WarningsInstalled = warningsInstalled,
+                    AlertPresetsInstalled = presetsInstalled,
                     PluginsInstalled = pluginsInstalled,
                     PluginsWritten = pluginsWritten,
                     PluginsRemoved = pluginsRemoved.Select(Path.GetFileName).ToList(),
@@ -307,22 +332,47 @@ namespace MissionPlanner.BSA.Config
                 return outcomes;
             }
 
+            var open = new List<KeyValuePair<string, BsaTransactionJournal>>();
             foreach (var journalPath in journalPaths)
             {
-                BsaTransactionJournal journal = null;
                 try
                 {
-                    journal = JsonConvert.DeserializeObject<BsaTransactionJournal>(File.ReadAllText(journalPath));
-                    if (journal == null) continue;
-                    if (journal.Status != BsaTransactionStatus.Applying && journal.Status != BsaTransactionStatus.PendingRestart)
-                        continue;
+                    var journal = JsonConvert.DeserializeObject<BsaTransactionJournal>(File.ReadAllText(journalPath));
+                    if (journal != null && IsOpen(journal))
+                        open.Add(new KeyValuePair<string, BsaTransactionJournal>(journalPath, journal));
+                }
+                catch (Exception ex)
+                {
+                    outcomes.Add(new BsaRecoveryOutcome
+                    {
+                        Failure = "Recovery could not complete: " + ex.Message,
+                        RecoveryFailed = true,
+                        JournalPath = journalPath
+                    });
+                }
+            }
 
+            var stacked = open.Count > 1;
+            foreach (var item in NewestFirst(open))
+            {
+                var journalPath = item.Key;
+                var journal = item.Value;
+                try
+                {
                     if (journal.Status == BsaTransactionStatus.Applying)
                     {
                         RestoreFiles(journal);
                         RestoreSettings(journal, liveConfig, saveSettings);
                         journal.Status = BsaTransactionStatus.RolledBack;
                         journal.Failure = "Recovered an interrupted apply at startup.";
+                        WriteJournal(Path.GetDirectoryName(journalPath), journal);
+                    }
+                    else if (stacked)
+                    {
+                        RestoreFiles(journal);
+                        RestoreSettings(journal, liveConfig, saveSettings);
+                        journal.Status = BsaTransactionStatus.RolledBack;
+                        journal.Failure = StackedImportsFailure;
                         WriteJournal(Path.GetDirectoryName(journalPath), journal);
                     }
                     else
@@ -374,6 +424,50 @@ namespace MissionPlanner.BSA.Config
             }
             return outcomes;
         }
+
+        public const string StackedImportsFailure =
+            "Another import was also waiting for a restart. Imports cannot be stacked, so all of them were undone " +
+            "and this machine is back to how it was before the first of them.";
+
+        public static BsaTransactionJournal FindPendingRestart(string transactionsDirectory)
+        {
+            if (string.IsNullOrWhiteSpace(transactionsDirectory) || !Directory.Exists(transactionsDirectory)) return null;
+            var open = new List<KeyValuePair<string, BsaTransactionJournal>>();
+            foreach (var journalPath in Directory.GetFiles(transactionsDirectory, JournalName, SearchOption.AllDirectories))
+            {
+                BsaTransactionJournal journal;
+                try
+                {
+                    journal = JsonConvert.DeserializeObject<BsaTransactionJournal>(File.ReadAllText(journalPath));
+                }
+                catch
+                {
+                    continue;
+                }
+                if (journal != null && IsOpen(journal))
+                    open.Add(new KeyValuePair<string, BsaTransactionJournal>(journalPath, journal));
+            }
+            return NewestFirst(open).Select(item => item.Value).FirstOrDefault();
+        }
+
+        public static string PendingRestartMessage(BsaTransactionJournal pending)
+        {
+            if (pending == null) return null;
+            var name = string.Join(" ", new[] { pending.PackageId, pending.PackageVersion }.Where(s => !string.IsNullOrWhiteSpace(s)));
+            return "An import staged at " + pending.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm") +
+                   (name.Length > 0 ? " (" + name + ")" : "") +
+                   " is still waiting for Mission Planner to restart.\n\n" +
+                   "Restart Mission Planner so that import can be verified, then import again. " +
+                   "Imports cannot be stacked: if several are waiting at start-up, all of them are undone.";
+        }
+
+        static bool IsOpen(BsaTransactionJournal journal) =>
+            journal.Status == BsaTransactionStatus.Applying || journal.Status == BsaTransactionStatus.PendingRestart;
+
+        static IEnumerable<KeyValuePair<string, BsaTransactionJournal>> NewestFirst(
+            IEnumerable<KeyValuePair<string, BsaTransactionJournal>> journals) =>
+            journals.OrderByDescending(item => item.Value.CreatedAtUtc)
+                .ThenByDescending(item => item.Value.TransactionId ?? "", StringComparer.Ordinal);
 
         static void RestoreSettings(BsaTransactionJournal journal, IDictionary<string, string> liveConfig, Action saveSettings)
         {

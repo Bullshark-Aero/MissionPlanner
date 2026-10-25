@@ -35,6 +35,7 @@ namespace MissionPlanner.BSA.UI
         readonly Button _exportButton = new Button { Text = "Export MP Config" };
         readonly Button _changePassphraseButton = new Button { Text = "Change Passphrase..." };
         readonly Button _editPolicyButton = new Button { Text = "Edit Lock Policy..." };
+        readonly Button _alertsButton = new Button { Text = "Aircraft Alerts..." };
 
         public ConfigBullsharkPage()
         {
@@ -44,6 +45,7 @@ namespace MissionPlanner.BSA.UI
             _exportButton.Click += (s, e) => OnExportClicked();
             _changePassphraseButton.Click += (s, e) => OnChangePassphraseClicked();
             _editPolicyButton.Click += (s, e) => OnEditPolicyClicked();
+            _alertsButton.Click += (s, e) => OnAlertsClicked();
 
             var approved = BuildSection("Approved Configuration",
                 Row(_importButton,
@@ -61,6 +63,10 @@ namespace MissionPlanner.BSA.UI
                 Row(_editPolicyButton,
                     "Engineering Mode only. Edit and re-approve the operational lock policy (lock_policy.json)."));
 
+            var alerts = BuildSection("Aircraft Alerts",
+                Row(_alertsButton,
+                    "Spoken alarms and readouts for this aircraft, such as engine out or airspeed, and which of them are pre-flight checks."));
+
             var flow = new FlowLayoutPanel
             {
                 FlowDirection = FlowDirection.TopDown,
@@ -69,6 +75,7 @@ namespace MissionPlanner.BSA.UI
                 Padding = new Padding(16)
             };
             flow.Controls.Add(approved);
+            flow.Controls.Add(alerts);
             flow.Controls.Add(authoring);
 
             Controls.Add(flow);
@@ -160,10 +167,30 @@ namespace MissionPlanner.BSA.UI
             return section;
         }
 
+        void OnAlertsClicked()
+        {
+            List<Warnings.CustomWarning> current;
+            lock (Warnings.WarningEngine.warnings)
+                current = Warnings.WarningEngine.warnings.ToList();
+            using (var form = new AircraftAlertsForm(current))
+                form.ShowDialog(FindForm());
+        }
+
         // ----- Import / Restore / Compare (moved from BSA/UI/ConfigActionsBar.cs) -----
+
+        static bool ImportWaitingForRestart(string caption)
+        {
+            var message = BsaConfigComposition.PendingImportMessage();
+            if (message == null) return false;
+            CustomMessageBox.Show(message, caption);
+            return true;
+        }
 
         void OnImportClicked()
         {
+            if (ImportWaitingForRestart("Import MP Config"))
+                return;
+
             using (var ofd = new OpenFileDialog { Title = "Import MP Config", Filter = "BSA MP Config (*.bsampconfig)|*.bsampconfig" })
             {
                 if (ofd.ShowDialog() != DialogResult.OK)
@@ -175,6 +202,9 @@ namespace MissionPlanner.BSA.UI
 
         void OnRestoreClicked()
         {
+            if (ImportWaitingForRestart("Restore Previous Config"))
+                return;
+
             var backupsDir = BsaPaths.BackupsDirectory;
             if (!Directory.Exists(backupsDir) || Directory.GetFiles(backupsDir, "*.bsampconfig").Length == 0)
             {
