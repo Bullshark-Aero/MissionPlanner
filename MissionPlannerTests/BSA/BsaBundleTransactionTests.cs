@@ -834,5 +834,119 @@ namespace MissionPlanner.BSA.Tests
                 if (Directory.Exists(root)) Directory.Delete(root, true);
             }
         }
+
+        sealed class PresetFixture : IDisposable
+        {
+            public readonly string Root = Path.Combine(Path.GetTempPath(), "BsaBundleTransactionTests_" + Guid.NewGuid().ToString("N"));
+            public string Bsa => Path.Combine(Root, "BSA", "config");
+            public string Transactions => Path.Combine(Root, "BSA", "transactions");
+            public string Warning => Path.Combine(Root, "warnings.xml");
+            public string SettingsFile => Path.Combine(Root, "config.xml");
+            public string Presets => Path.Combine(Bsa, "alert_presets.json");
+            public readonly Dictionary<string, string> Live = new Dictionary<string, string> { ["distunits"] = "0" };
+            public readonly Action Save;
+
+            public PresetFixture()
+            {
+                Directory.CreateDirectory(Bsa);
+                Save = () => File.WriteAllText(SettingsFile, string.Join(";", Live));
+            }
+
+            public BsaBundleApplyResult Apply(ConfigPackageContents package, bool installPresets = true, Action<string> checkpoint = null) =>
+                BsaBundleTransaction.Apply(package, Live, new[] { "distunits" }, Policy(), Save, Warning,
+                    Bsa, Transactions, Path.Combine(Root, "plugins"),
+                    new BsaBundleApplyOptions { InstallAlertPresets = installPresets }, SettingsFile, checkpoint);
+
+            public void Dispose()
+            {
+                if (Directory.Exists(Root)) Directory.Delete(Root, true);
+            }
+        }
+
+        static ConfigPackageContents PackageWithPresets(params CustomWarning[] presets)
+        {
+            var package = Package();
+            package.AlertPresetsJson = AlertPresetStore.Serialize(presets);
+            return package;
+        }
+
+        [TestMethod]
+        public void Apply_InstallsAlertPresetsAsAnEditableFile()
+        {
+            using (var fixture = new PresetFixture())
+            {
+                File.WriteAllText(fixture.Presets, AlertPresetStore.Serialize(new[] { AlertPresets.AirspeedReadout() }));
+
+                var result = fixture.Apply(PackageWithPresets(AlertPresets.EngineOut()));
+
+                Assert.IsTrue(result.AlertPresetsInstalled);
+                Assert.AreEqual("engine-out", AlertPresetStore.Load(fixture.Presets).Presets.Single().Alert.Id);
+
+                AlertPresetStore.Save(fixture.Presets, AlertPresets.All());
+                BsaBundleTransaction.RecoverAndVerify(fixture.Transactions, fixture.Live, fixture.Save);
+
+                var journal = Newtonsoft.Json.JsonConvert.DeserializeObject<BsaTransactionJournal>(
+                    File.ReadAllText(Path.Combine(result.TransactionDirectory, "journal.json")));
+                Assert.AreEqual(BsaTransactionStatus.Committed, journal.Status, journal.Failure);
+                CollectionAssert.Contains(journal.EditableTargets, fixture.Presets);
+                Assert.IsFalse(journal.ExpectedHashes.ContainsKey(fixture.Presets));
+                Assert.AreEqual(5, AlertPresetStore.Load(fixture.Presets).Presets.Count);
+            }
+        }
+
+        [TestMethod]
+        public void Apply_LeavesThePresetsAloneWhenNotAskedOrNotCarried()
+        {
+            using (var fixture = new PresetFixture())
+            {
+                var mine = AlertPresetStore.Serialize(new[] { AlertPresets.AirspeedReadout() });
+                File.WriteAllText(fixture.Presets, mine);
+
+                Assert.IsFalse(fixture.Apply(PackageWithPresets(AlertPresets.EngineOut()), installPresets: false).AlertPresetsInstalled);
+                Assert.AreEqual(mine, File.ReadAllText(fixture.Presets));
+                Assert.IsFalse(fixture.Apply(Package("other-hash")).AlertPresetsInstalled);
+                Assert.AreEqual(mine, File.ReadAllText(fixture.Presets));
+            }
+        }
+
+        [TestMethod]
+        public void Apply_FailureRestoresTheMachinesPresets()
+        {
+            using (var fixture = new PresetFixture())
+            {
+                var mine = AlertPresetStore.Serialize(new[] { AlertPresets.AirspeedReadout() });
+                File.WriteAllText(fixture.Presets, mine);
+                var package = PackageWithPresets(AlertPresets.EngineOut());
+
+                Assert.ThrowsException<InvalidOperationException>(() => fixture.Apply(package, checkpoint: point =>
+                {
+                    if (point.StartsWith("file-committed") && File.ReadAllText(fixture.Presets) == package.AlertPresetsJson)
+                        throw new IOException("injected failure after the presets were written");
+                }));
+
+                Assert.AreEqual(mine, File.ReadAllText(fixture.Presets));
+            }
+        }
+
+        [TestMethod]
+        public void Reimport_AfterPresetDrift_PutsTheBundlesPresetsBack()
+        {
+            using (var fixture = new PresetFixture())
+            {
+                var package = PackageWithPresets(AlertPresets.EngineOut());
+                var first = fixture.Apply(package);
+                BsaBundleTransaction.RecoverAndVerify(fixture.Transactions, fixture.Live, fixture.Save);
+
+                var unchanged = fixture.Apply(package);
+                Assert.IsTrue(unchanged.NoChangesRequired);
+                Assert.AreEqual(first.TransactionId, unchanged.TransactionId);
+
+                AlertPresetStore.Save(fixture.Presets, new CustomWarning[0]);
+                var repair = fixture.Apply(package);
+
+                Assert.IsFalse(repair.NoChangesRequired);
+                Assert.AreEqual("engine-out", AlertPresetStore.Load(fixture.Presets).Presets.Single().Alert.Id);
+            }
+        }
     }
 }

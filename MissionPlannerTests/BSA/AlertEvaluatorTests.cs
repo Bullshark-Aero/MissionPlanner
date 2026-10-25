@@ -263,6 +263,28 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
+        public void ColourOnly_ColoursTheQuickViewAndNeverSpeaks()
+        {
+            var alert = EngineOut(hold: 0);
+            alert.Text = "";
+            alert.Alert.StaleText = "";
+            alert.Alert.Show = true;
+            alert.color = "Orange";
+            var evaluator = new AlertEvaluator();
+            var list = new[] { alert };
+
+            var fired = evaluator.Evaluate(list, At(0), Value(500, 1));
+            Assert.AreEqual(AlertMode.Triggered, Only(fired).Mode);
+            Assert.IsNull(Only(fired).SpeakText);
+            Assert.AreEqual("Orange", fired.Colours.Single().Colour);
+
+            Assert.IsNull(Only(evaluator.Evaluate(list, At(30), Value(500, 2))).SpeakText);
+            var stale = evaluator.Evaluate(list, At(31), Value(500, 3, fresh: false));
+            Assert.AreEqual(AlertMode.Stale, Only(stale).Mode);
+            Assert.IsNull(Only(stale).SpeakText);
+        }
+
+        [TestMethod]
         public void Colour_IsClearedWhenTheAlertIsRemoved()
         {
             var alert = EngineOut(hold: 0);

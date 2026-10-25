@@ -16,6 +16,8 @@ namespace MissionPlanner.BSA.Tests
         string _originalConfigFile;
         List<CustomWarning> _originalWarnings;
         string _tempFile;
+        string _presetsFile;
+        readonly List<string> _messages = new List<string>();
 
         [TestInitialize]
         public void Setup()
@@ -23,6 +25,7 @@ namespace MissionPlanner.BSA.Tests
             _originalConfigFile = WarningEngine.warningconfigfile;
             _originalWarnings = WarningEngine.warnings;
             _tempFile = Path.Combine(Path.GetTempPath(), "AircraftAlertsFormTests_" + Guid.NewGuid().ToString("N") + ".xml");
+            _presetsFile = Path.Combine(Path.GetTempPath(), "AircraftAlertsFormTests_" + Guid.NewGuid().ToString("N") + ".json");
             WarningEngine.warningconfigfile = _tempFile;
         }
 
@@ -32,6 +35,7 @@ namespace MissionPlanner.BSA.Tests
             WarningEngine.warningconfigfile = _originalConfigFile;
             WarningEngine.warnings = _originalWarnings;
             if (File.Exists(_tempFile)) File.Delete(_tempFile);
+            if (File.Exists(_presetsFile)) File.Delete(_presetsFile);
         }
 
         static ListView List(Form form) => Descendants(form).OfType<ListView>().Single();
@@ -96,7 +100,7 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
-        public void AddAlert_StartsAsAnArmedAlarmThatStillNeedsText()
+        public void AddAlert_StartsAsAnArmedAlarmThatDoesNothingYet()
         {
             using (var form = new AircraftAlertsForm(new CustomWarning[0]))
             {
@@ -104,7 +108,7 @@ namespace MissionPlanner.BSA.Tests
 
                 Assert.AreEqual(AlertKind.Alarm, alert.Alert.Kind);
                 Assert.AreEqual(AlertPhase.Armed, alert.Alert.Phase);
-                Assert.IsTrue(AircraftAlertsForm.Validate(form.Alerts).Any(p => p.Contains("say")));
+                Assert.IsTrue(AircraftAlertsForm.Validate(form.Alerts).Any(p => p.Contains("does nothing")));
             }
         }
 
@@ -235,20 +239,201 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
-        public void StatusChips_SayWhatTheAlertsCanSee()
+        public void StatusChips_SayWhetherTheAircraftIsSendingData()
         {
             using (var form = new AircraftAlertsForm(new CustomWarning[0]))
             {
-                form.UpdateStatusChips(true, false, 3, 12, false);
+                Assert.AreEqual("Aircraft not connected", form.LinkStatus);
+                Assert.AreEqual("Speech is off", form.SpeechStatus);
 
-                Assert.AreEqual("Flight phase: not received (requested while an alert needs it)", form.PhaseStatus);
-                Assert.AreEqual("Judicar values: 3 of 12 fresh", form.NamedStatus);
-                Assert.AreEqual("Speech is off in Mission Planner: alerts will only show", form.SpeechStatus);
+                form.UpdateStatusChips(AircraftLinkStatus.NoData, false);
+                Assert.AreEqual("Aircraft connected: no data received", form.LinkStatus);
+                Assert.AreEqual("Speech is off", form.SpeechStatus);
 
-                form.UpdateStatusChips(true, true, 12, 12, true);
-                Assert.AreEqual("Flight phase: receiving", form.PhaseStatus);
+                form.UpdateStatusChips(AircraftLinkStatus.Receiving, true);
+                Assert.AreEqual("Aircraft connected: receiving data", form.LinkStatus);
                 Assert.AreEqual("Speech is on", form.SpeechStatus);
+
+                Assert.IsFalse(Descendants(form).OfType<Label>().Any(l => l.Text.Contains("Judicar values")));
+                Assert.IsFalse(Descendants(form).OfType<Label>().Any(l => l.Text.Contains("Flight phase")));
             }
+        }
+
+        [TestMethod]
+        public void Classify_UsesTheLinkAndHowRecentTheLastHeartbeatWas()
+        {
+            var now = new DateTime(2026, 10, 25, 12, 0, 0, DateTimeKind.Utc);
+
+            Assert.AreEqual(AircraftLinkStatus.NotConnected, AircraftAlertsForm.Classify(false, now, now));
+            Assert.AreEqual(AircraftLinkStatus.NoData, AircraftAlertsForm.Classify(true, null, now));
+            Assert.AreEqual(AircraftLinkStatus.NoData, AircraftAlertsForm.Classify(true, now.AddSeconds(-4), now));
+            Assert.AreEqual(AircraftLinkStatus.Receiving, AircraftAlertsForm.Classify(true, now.AddSeconds(-1), now));
+        }
+
+        [TestMethod]
+        public void Validate_AcceptsAnAlertThatOnlyColoursTheQuickView()
+        {
+            var colourOnly = ColourOnly();
+
+            Assert.AreEqual(0, AircraftAlertsForm.Validate(new[] { colourOnly }).Count);
+            Assert.IsTrue(AircraftAlertsForm.DoesSomething(colourOnly));
+        }
+
+        [TestMethod]
+        public void Validate_RejectsAnAlertThatDoesNothing()
+        {
+            var silent = ColourOnly();
+            silent.Alert.Show = false;
+            var noColour = ColourOnly();
+            noColour.color = AlertEvaluator.NoColour;
+
+            Assert.IsTrue(AircraftAlertsForm.Validate(new[] { silent }).Single().Contains("does nothing"));
+            Assert.IsFalse(AircraftAlertsForm.DoesSomething(noColour));
+
+            silent.Alert.Preflight = AlertPreflight.Warning;
+            Assert.AreEqual(0, AircraftAlertsForm.Validate(new[] { silent }).Count, "a pre-flight check is enough");
+            silent.Alert.Preflight = AlertPreflight.None;
+            silent.Alert.StaleText = "Engine RPM lost";
+            Assert.AreEqual(0, AircraftAlertsForm.Validate(new[] { silent }).Count, "stale text is enough");
+        }
+
+        [TestMethod]
+        public void ColourOnlyAlert_ShowsADashUnderSaysAndCannotBeSaidNow()
+        {
+            using (var form = new AircraftAlertsForm(new[] { ColourOnly() }))
+            {
+                var row = List(form).Items[0].SubItems.Cast<ListViewItem.ListViewSubItem>().Select(s => s.Text).ToArray();
+                var sayNow = Descendants(form).OfType<Button>().Single(b => b.Text == "Say it now");
+
+                Assert.AreEqual("-", row[4]);
+                Assert.IsFalse(sayNow.Enabled);
+                Assert.IsTrue(Descendants(form).OfType<Label>().Any(l => l.Text == "Say (optional)"));
+            }
+        }
+
+        [TestMethod]
+        public void ColourOnlyAlert_SurvivesSaveAndReloadWithoutGainingText()
+        {
+            WarningEngine.warnings = new List<CustomWarning>();
+
+            AircraftAlertsForm.ApplyAlerts(WarningEngine.warnings, new[] { ColourOnly() });
+            WarningEngine.SaveConfig();
+            WarningEngine.LoadConfig();
+
+            Assert.AreEqual("", WarningEngine.warnings.Single().Text);
+        }
+
+        [TestMethod]
+        public void SaveAsPreset_WritesTheSelectedAlertToThePresetsFile()
+        {
+            using (var form = PresetForm(ColourOnly()))
+            {
+                Assert.IsTrue(form.SaveSelectedAsPreset());
+
+                var saved = AlertPresetStore.Load(_presetsFile);
+                Assert.IsNull(saved.Error);
+                Assert.AreEqual("RPM colour", saved.Presets.Single().Alert.Title);
+                Assert.AreEqual("", saved.Presets.Single().Text);
+                CollectionAssert.Contains(form.PresetMenuText(), "RPM colour");
+                CollectionAssert.Contains(form.PresetMenuText(), "  RPM colour");
+            }
+        }
+
+        [TestMethod]
+        public void SaveAsPreset_ReplacesASavedPresetOnlyWhenConfirmed()
+        {
+            using (var form = PresetForm(ColourOnly()))
+            {
+                form.SaveSelectedAsPreset();
+                form.Selected.Warning = 500;
+                var asked = 0;
+
+                form.ConfirmReplace = title => { asked++; return false; };
+                Assert.IsFalse(form.SaveSelectedAsPreset());
+                Assert.AreEqual(1000, AlertPresetStore.Load(_presetsFile).Presets.Single().Warning);
+
+                form.ConfirmReplace = title => { asked++; return true; };
+                Assert.IsTrue(form.SaveSelectedAsPreset());
+                Assert.AreEqual(500, AlertPresetStore.Load(_presetsFile).Presets.Single().Warning);
+                Assert.AreEqual(2, asked);
+            }
+        }
+
+        [TestMethod]
+        public void SaveAsPreset_RefusesABuiltInNameAndAnInvalidAlert()
+        {
+            using (var form = PresetForm(AlertPresets.EngineOut()))
+            {
+                Assert.IsFalse(form.SaveSelectedAsPreset());
+                Assert.IsTrue(_messages.Single().Contains("built-in preset"));
+
+                form.Selected.Alert.Title = "My engine";
+                form.Selected.Text = "";
+                form.Selected.Alert.StaleText = "";
+                form.Selected.Alert.Show = false;
+                Assert.IsFalse(form.SaveSelectedAsPreset());
+                Assert.IsTrue(_messages.Last().Contains("does nothing"));
+                Assert.IsFalse(File.Exists(_presetsFile));
+            }
+        }
+
+        [TestMethod]
+        public void SaveAsPreset_LeavesAnUnreadablePresetsFileAlone()
+        {
+            File.WriteAllText(_presetsFile, "{ not json");
+            using (var form = PresetForm(ColourOnly()))
+            {
+                Assert.IsFalse(form.SaveSelectedAsPreset());
+                Assert.AreEqual("{ not json", File.ReadAllText(_presetsFile));
+                CollectionAssert.Contains(form.PresetMenuText(), "Saved presets could not be read");
+            }
+        }
+
+        [TestMethod]
+        public void SavedPreset_IsAddedWithAUniqueIdAndCanBeRemoved()
+        {
+            using (var form = PresetForm(ColourOnly()))
+            {
+                form.SaveSelectedAsPreset();
+
+                var added = form.AddSavedPreset("rpm colour");
+
+                Assert.AreEqual("rpm-colour-2", added.Alert.Id);
+                Assert.AreSame(added, form.Selected);
+                Assert.AreEqual(2, form.Alerts.Count);
+
+                form.ConfirmRemove = title => true;
+                Assert.IsTrue(form.RemoveSavedPreset("RPM colour"));
+                Assert.AreEqual(0, AlertPresetStore.Load(_presetsFile).Presets.Count);
+                Assert.IsNull(form.AddSavedPreset("RPM colour"));
+                CollectionAssert.AreEqual(AlertPresets.Ids.Select(id => AlertPresets.Create(id).Alert.Title).ToList(),
+                    form.PresetMenuText());
+            }
+        }
+
+        AircraftAlertsForm PresetForm(CustomWarning alert)
+        {
+            var form = new AircraftAlertsForm(new[] { alert })
+            {
+                PresetsPath = _presetsFile,
+                ShowMessage = text => _messages.Add(text),
+                ConfirmReplace = title => false,
+                ConfirmRemove = title => false
+            };
+            _messages.Clear();
+            return form;
+        }
+
+        static CustomWarning ColourOnly()
+        {
+            var alert = AlertPresets.EngineOut();
+            alert.Text = "";
+            alert.Alert.StaleText = "";
+            alert.Alert.Id = "rpm-colour";
+            alert.Alert.Title = "RPM colour";
+            alert.Alert.Show = true;
+            alert.color = "Orange";
+            return alert;
         }
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Xml.Serialization;
+using MissionPlanner.BSA.Core;
 using MissionPlanner.Warnings;
 
 namespace MissionPlanner.BSA.Config
@@ -39,7 +40,8 @@ namespace MissionPlanner.BSA.Config
 
         public static BsaInstallResult Install(ConfigPackageContents package,
             string configDirectory, string userDataDirectory,
-            bool installChecklist, bool installKeyPolicy, bool installLockPolicy, bool installWarnings)
+            bool installChecklist, bool installKeyPolicy, bool installLockPolicy, bool installWarnings,
+            bool installAlertPresets = false)
         {
             if (package == null) throw new ArgumentNullException(nameof(package));
             if (string.IsNullOrWhiteSpace(configDirectory)) throw new ArgumentException("configDirectory is required.", nameof(configDirectory));
@@ -81,6 +83,13 @@ namespace MissionPlanner.BSA.Config
                 Directory.CreateDirectory(userDataDirectory);
                 File.WriteAllText(Path.Combine(userDataDirectory, WarningsFileName), package.WarningsXml);
                 result.InstalledFiles.Add(WarningsFileName);
+            }
+
+            if (installAlertPresets && package.AlertPresetsJson != null)
+            {
+                Alerts.AlertPresetStore.Parse(package.AlertPresetsJson);
+                File.WriteAllText(Path.Combine(configDirectory, BsaPaths.AlertPresetsFileName), package.AlertPresetsJson);
+                result.InstalledFiles.Add(BsaPaths.AlertPresetsFileName);
             }
 
             return result;

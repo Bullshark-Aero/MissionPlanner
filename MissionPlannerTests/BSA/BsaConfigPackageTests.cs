@@ -274,5 +274,67 @@ namespace MissionPlanner.BSA.Tests
             Assert.ThrowsException<FileNotFoundException>(() =>
                 BsaConfigPackage.Read(@"C:\does\not\exist.bsampconfig"));
         }
+
+        [TestMethod]
+        public void AlertPresets_TravelInBundlesAndSettingsPackages()
+        {
+            var checklistPath = TempJsonFile();
+            var keyPolicyPath = TempJsonFile();
+            var presets = Alerts.AlertPresetStore.Serialize(new[] { Alerts.AlertPresets.EngineOut() });
+            var presetsPath = TempJsonFile(presets);
+            var bundlePath = TempPackagePath();
+            var legacyPath = TempPackagePath();
+            try
+            {
+                var profile = Judicar2600BundleProfile.Create(new BsaQuickViewProfile
+                {
+                    Rows = 1, Columns = 1,
+                    Cells = { new BsaQuickViewCell { Position = 1, SourceId = "MAV_ESC_HOT", Label = "ESC" } }
+                });
+                var manifest = BsaConfigPackage.Write(bundlePath, new Dictionary<string, string>(), checklistPath, keyPolicyPath,
+                    null, null, "1.0.0", "op", "1.3.83", null, profile, Judicar2600BundleProfile.PackageId, null, presetsPath);
+                BsaConfigPackage.WriteLegacy(legacyPath, new Dictionary<string, string>(), checklistPath, keyPolicyPath,
+                    null, null, "1.0.0", "op", "1.3.83", null, presetsPath);
+
+                Assert.IsTrue(manifest.Components.Exists(c =>
+                    c.Type == "bsa-alert-presets" && c.Path == BsaConfigPackage.AlertPresetsEntryName && !c.Required));
+                Assert.AreEqual(presets, BsaConfigPackage.Read(bundlePath).AlertPresetsJson);
+                Assert.AreEqual(presets, BsaConfigPackage.Read(legacyPath).AlertPresetsJson);
+            }
+            finally
+            {
+                File.Delete(checklistPath);
+                File.Delete(keyPolicyPath);
+                File.Delete(presetsPath);
+                if (File.Exists(bundlePath)) File.Delete(bundlePath);
+                if (File.Exists(legacyPath)) File.Delete(legacyPath);
+            }
+        }
+
+        [TestMethod]
+        public void AlertPresets_OmittedWhenThereIsNoFile_AndRejectedWhenUnreadable()
+        {
+            var checklistPath = TempJsonFile();
+            var keyPolicyPath = TempJsonFile();
+            var badPresetsPath = TempJsonFile("{ not json");
+            var outputPath = TempPackagePath();
+            try
+            {
+                BsaConfigPackage.WriteLegacy(outputPath, new Dictionary<string, string>(), checklistPath, keyPolicyPath,
+                    null, null, "1.0.0", "op", "1.3.83", null, badPresetsPath + ".missing");
+                Assert.IsNull(BsaConfigPackage.Read(outputPath).AlertPresetsJson);
+
+                BsaConfigPackage.WriteLegacy(outputPath, new Dictionary<string, string>(), checklistPath, keyPolicyPath,
+                    null, null, "1.0.0", "op", "1.3.83", null, badPresetsPath);
+                Assert.ThrowsException<InvalidDataException>(() => BsaConfigPackage.Read(outputPath));
+            }
+            finally
+            {
+                File.Delete(checklistPath);
+                File.Delete(keyPolicyPath);
+                File.Delete(badPresetsPath);
+                if (File.Exists(outputPath)) File.Delete(outputPath);
+            }
+        }
     }
 }

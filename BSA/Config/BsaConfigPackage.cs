@@ -23,6 +23,7 @@ namespace MissionPlanner.BSA.Config
         public string KeyPolicyJson { get; set; }
         public string LockPolicyJson { get; set; }
         public string WarningsXml { get; set; }
+        public string AlertPresetsJson { get; set; }
         public string ReleaseNotes { get; set; }
         public bool IsLegacy { get; set; }
         public string PackageSha256 { get; set; }
@@ -51,6 +52,7 @@ namespace MissionPlanner.BSA.Config
         public const string KeyPolicyEntryName = "bsa/bsa_key_policy.json";
         public const string LockPolicyEntryName = "bsa/lock_policy.json";
         public const string WarningsEntryName = "mpconfig/warnings.xml";
+        public const string AlertPresetsEntryName = "bsa/alert_presets.json";
         public const string ReleaseNotesEntryName = "RELEASE_NOTES.md";
 
         static readonly UTF8Encoding StrictUtf8 = new UTF8Encoding(false, true);
@@ -58,7 +60,7 @@ namespace MissionPlanner.BSA.Config
         {
             "mpconfig-subset", "mpconfig-warnings", "quickview-layout", "telemetry-bindings",
             "health-rules", "bsa-preflight-checks", "bsa-key-policy", "bsa-lock-policy",
-            "release-notes", "plugin-descriptor", "plugin-payload", "signature"
+            "bsa-alert-presets", "release-notes", "plugin-descriptor", "plugin-payload", "signature"
         };
         static readonly HashSet<string> KnownApplyModes = new HashSet<string>(StringComparer.Ordinal)
         {
@@ -78,13 +80,15 @@ namespace MissionPlanner.BSA.Config
             ["bsa-preflight-checks"] = ChecklistEntryName,
             ["bsa-key-policy"] = KeyPolicyEntryName,
             ["bsa-lock-policy"] = LockPolicyEntryName,
+            ["bsa-alert-presets"] = AlertPresetsEntryName,
             ["release-notes"] = ReleaseNotesEntryName
         };
 
         public static PackageManifest WriteLegacy(string outputPath, IReadOnlyDictionary<string, string> subsetConfig,
             string checklistJsonPath, string keyPolicyJsonPath, string lockPolicyJsonPathOrNull,
             string warningsXmlPathOrNull,
-            string version, string createdByOperator, string missionPlannerVersion, string releaseNotes)
+            string version, string createdByOperator, string missionPlannerVersion, string releaseNotes,
+            string alertPresetsJsonPathOrNull = null)
         {
             if (string.IsNullOrWhiteSpace(outputPath)) throw new ArgumentException("outputPath is required.", nameof(outputPath));
             if (subsetConfig == null) throw new ArgumentNullException(nameof(subsetConfig));
@@ -102,6 +106,9 @@ namespace MissionPlanner.BSA.Config
 
             if (!string.IsNullOrEmpty(warningsXmlPathOrNull) && File.Exists(warningsXmlPathOrNull))
                 entries[WarningsEntryName] = File.ReadAllText(warningsXmlPathOrNull);
+
+            if (!string.IsNullOrEmpty(alertPresetsJsonPathOrNull) && File.Exists(alertPresetsJsonPathOrNull))
+                entries[AlertPresetsEntryName] = File.ReadAllText(alertPresetsJsonPathOrNull);
 
             var createdAtUtc = DateTime.UtcNow;
             var fileHashes = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -152,7 +159,8 @@ namespace MissionPlanner.BSA.Config
             string checklistJsonPath, string keyPolicyJsonPath, string lockPolicyJsonPathOrNull,
             string warningsXmlPathOrNull,
             string version, string createdByOperator, string missionPlannerVersion, string releaseNotes,
-            BsaBundleProfile profile, string packageId, IReadOnlyList<BsaPluginExport> plugins = null)
+            BsaBundleProfile profile, string packageId, IReadOnlyList<BsaPluginExport> plugins = null,
+            string alertPresetsJsonPathOrNull = null)
         {
             if (string.IsNullOrWhiteSpace(outputPath)) throw new ArgumentException("outputPath is required.", nameof(outputPath));
             if (subsetConfig == null) throw new ArgumentNullException(nameof(subsetConfig));
@@ -186,6 +194,10 @@ namespace MissionPlanner.BSA.Config
             if (!string.IsNullOrEmpty(warningsXmlPathOrNull) && File.Exists(warningsXmlPathOrNull))
                 AddText(entries, "mpconfig-warnings", "mpconfig-warnings", WarningsEntryName, false, "replace",
                     File.ReadAllText(warningsXmlPathOrNull), false);
+
+            if (!string.IsNullOrEmpty(alertPresetsJsonPathOrNull) && File.Exists(alertPresetsJsonPathOrNull))
+                AddText(entries, "bsa-alert-presets", "bsa-alert-presets", AlertPresetsEntryName, false, "replace",
+                    File.ReadAllText(alertPresetsJsonPathOrNull), false);
 
             foreach (var plugin in plugins ?? new List<BsaPluginExport>())
                 AddPlugin(entries, plugin, missionPlannerVersion);
@@ -309,6 +321,7 @@ namespace MissionPlanner.BSA.Config
                 ChecklistJson = ReadTextComponent(entries, byType, "bsa-preflight-checks"),
                 KeyPolicyJson = ReadTextComponent(entries, byType, "bsa-key-policy"),
                 LockPolicyJson = ReadTextComponent(entries, byType, "bsa-lock-policy"),
+                AlertPresetsJson = ReadTextComponent(entries, byType, "bsa-alert-presets"),
                 ReleaseNotes = ReadTextComponent(entries, byType, "release-notes"),
                 IsLegacy = false
             };
@@ -355,6 +368,8 @@ namespace MissionPlanner.BSA.Config
                 ReleaseNotes = (string)manifestObject["ReleaseNotes"],
                 FileHashes = fileHashes
             };
+            var alertPresetsJson = ReadEntryTextOrNull(entries, AlertPresetsEntryName);
+            if (alertPresetsJson != null) Alerts.AlertPresetStore.Parse(alertPresetsJson);
             return new ConfigPackageContents
             {
                 Manifest = manifest,
@@ -364,6 +379,7 @@ namespace MissionPlanner.BSA.Config
                 KeyPolicyJson = ReadEntryTextOrNull(entries, KeyPolicyEntryName),
                 LockPolicyJson = ReadEntryTextOrNull(entries, LockPolicyEntryName),
                 WarningsXml = ReadEntryTextOrNull(entries, WarningsEntryName),
+                AlertPresetsJson = alertPresetsJson,
                 ReleaseNotes = manifest.ReleaseNotes,
                 IsLegacy = true
             };
@@ -454,6 +470,8 @@ namespace MissionPlanner.BSA.Config
         {
             if (contents.WarningsXml != null)
                 BsaConfigInstaller.EnsureParseableWarnings(contents.WarningsXml);
+            if (contents.AlertPresetsJson != null)
+                Alerts.AlertPresetStore.Parse(contents.AlertPresetsJson);
 
             if (!contents.HasCompleteCoreProfile &&
                 (contents.QuickView != null || contents.TelemetryBindings != null || contents.HealthRules != null))

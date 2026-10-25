@@ -18,6 +18,8 @@ namespace MissionPlanner.BSA.Core
         public static string TransactionsDirectory => Path.Combine(RootDirectory, "transactions");
         public static string InstallStatePath => Path.Combine(RootDirectory, "install-state.json");
         public static string ActiveHealthRulesPath => Path.Combine(ConfigDirectory, "active-health-rules.json");
+        public static string AlertPresetsPath => Path.Combine(ConfigDirectory, AlertPresetsFileName);
+        public const string AlertPresetsFileName = "alert_presets.json";
 
         /// <summary>Single well-known slot for "this machine's approved reference config" (WP2 Phase A -
         /// no multi-version registry yet, that's Phase B). Designating a package as approved is just

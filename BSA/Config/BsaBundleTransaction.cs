@@ -48,6 +48,7 @@ namespace MissionPlanner.BSA.Config
         public bool InstallKeyPolicy { get; set; }
         public bool InstallLockPolicy { get; set; }
         public bool InstallWarnings { get; set; }
+        public bool InstallAlertPresets { get; set; }
         public bool InstallPlugins { get; set; }
         public bool RemoveUnlistedPlugins { get; set; }
     }
@@ -61,6 +62,7 @@ namespace MissionPlanner.BSA.Config
         public bool RestartRequired { get; set; }
         public bool NoChangesRequired { get; set; }
         public bool WarningsInstalled { get; set; }
+        public bool AlertPresetsInstalled { get; set; }
         public bool PluginsInstalled { get; set; }
         public IReadOnlyList<string> PluginsWritten { get; set; } = new List<string>();
         public IReadOnlyList<string> PluginsRemoved { get; set; } = new List<string>();
@@ -102,13 +104,19 @@ namespace MissionPlanner.BSA.Config
                 ? File.ReadAllText(warningPath)
                 : null;
             var warningsXml = HealthRuleMigration.WarningsToInstall(package, options?.InstallWarnings == true, currentWarnings);
+            var presetsPath = Path.Combine(bsaConfigDirectory, BsaPaths.AlertPresetsFileName);
+            var presetsInstalled = options?.InstallAlertPresets == true && package.AlertPresetsJson != null;
+            if (presetsInstalled) AlertPresetStore.Parse(package.AlertPresetsJson);
+            var presetsDiffer = presetsInstalled && !AlertPresetStore.SameContent(package.AlertPresetsJson,
+                File.Exists(presetsPath) ? File.ReadAllText(presetsPath) : null);
 
             var existing = FindCommittedInstallation(package, transactionsDirectory,
                 Path.Combine(Path.GetDirectoryName(bsaConfigDirectory), "install-state.json"), liveConfig);
             if (existing != null && (RequestedPluginsMissing(package, options, pluginDirectory) ||
                                      options?.RemoveUnlistedPlugins == true &&
                                      BsaPluginFolder.Unlisted(package, pluginDirectory).Count > 0 ||
-                                     HealthRuleMigration.WouldChange(warningsXml, currentWarnings)))
+                                     HealthRuleMigration.WouldChange(warningsXml, currentWarnings) ||
+                                     presetsDiffer))
                 existing = null;
             if (existing != null)
                 return new BsaBundleApplyResult
@@ -162,6 +170,11 @@ namespace MissionPlanner.BSA.Config
 
             var editableTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (warningsInstalled) editableTargets.Add(warningPath);
+            if (presetsInstalled)
+            {
+                targets[presetsPath] = Encoding.UTF8.GetBytes(package.AlertPresetsJson);
+                editableTargets.Add(presetsPath);
+            }
             AddOptionalTarget(targets, package.ChecklistJson, options?.InstallChecklist == true,
                 Path.Combine(bsaConfigDirectory, BsaConfigInstaller.ChecklistFileName));
             AddOptionalTarget(targets, package.KeyPolicyJson, options?.InstallKeyPolicy == true,
@@ -276,6 +289,7 @@ namespace MissionPlanner.BSA.Config
                     Status = journal.Status,
                     ChangedSettings = changed,
                     WarningsInstalled = warningsInstalled,
+                    AlertPresetsInstalled = presetsInstalled,
                     PluginsInstalled = pluginsInstalled,
                     PluginsWritten = pluginsWritten,
                     PluginsRemoved = pluginsRemoved.Select(Path.GetFileName).ToList(),

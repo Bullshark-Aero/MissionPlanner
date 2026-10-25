@@ -8,13 +8,22 @@ using System.Windows.Forms;
 using System.Xml.Serialization;
 using MissionPlanner.BSA.Alerts;
 using MissionPlanner.BSA.Config;
+using MissionPlanner.BSA.Core;
 using MissionPlanner.Warnings;
 
 namespace MissionPlanner.BSA.UI
 {
+    public enum AircraftLinkStatus
+    {
+        NotConnected,
+        NoData,
+        Receiving
+    }
+
     public class AircraftAlertsForm : Form
     {
         public const string Caption = "Aircraft Alerts";
+        public const double DataFreshSeconds = 3;
 
         sealed class Choice
         {
@@ -67,8 +76,7 @@ namespace MissionPlanner.BSA.UI
         };
 
         readonly List<CustomWarning> _alerts;
-        readonly Label _phaseChip = Chip();
-        readonly Label _namedChip = Chip();
+        readonly Label _linkChip = Chip();
         readonly Label _speechChip = Chip();
         readonly ListView _list = new ListView
         {
@@ -82,6 +90,7 @@ namespace MissionPlanner.BSA.UI
 
         readonly Button _addButton = new Button { Text = "Add alert", AutoSize = true };
         readonly Button _presetButton = new Button { Text = "Add from preset...", AutoSize = true };
+        readonly Button _savePresetButton = new Button { Text = "Add as new preset", AutoSize = true };
         readonly Button _sayButton = new Button { Text = "Say it now", AutoSize = true };
         readonly Button _deleteButton = new Button { Text = "Delete", AutoSize = true };
         readonly Button _saveButton = new Button { Text = "Save", AutoSize = true };
@@ -146,22 +155,21 @@ namespace MissionPlanner.BSA.UI
                 using (var dialog = new ColorDialog { Color = start, FullOpen = true, AnyColor = true })
                     return dialog.ShowDialog(this) == DialogResult.OK ? dialog.Color : (Color?)null;
             };
+            ConfirmReplace = title => CustomMessageBox.Show(
+                "A saved preset is already called '" + title + "'.\n\nReplace it with this alert?",
+                Caption, CustomMessageBox.MessageBoxButtons.YesNo) == CustomMessageBox.DialogResult.Yes;
+            ConfirmRemove = title => CustomMessageBox.Show(
+                "Remove the saved preset '" + title + "'?\n\nAlerts already added from it are not changed.",
+                Caption, CustomMessageBox.MessageBoxButtons.YesNo) == CustomMessageBox.DialogResult.Yes;
+            ShowMessage = text => CustomMessageBox.Show(text, Caption);
             foreach (var option in WatchOptions()) _watch.Items.Add(option);
-            foreach (var id in AlertPresets.Ids)
-            {
-                var preset = AlertPresets.Create(id);
-                var item = new ToolStripMenuItem(preset.Alert.Title) { Tag = id };
-                item.Click += (s, e) => AddPreset((string)((ToolStripMenuItem)s).Tag);
-                _presetMenu.Items.Add(item);
-            }
 
             var chips = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, WrapContents = true, Margin = new Padding(0, 0, 0, 6) };
-            chips.Controls.Add(_phaseChip);
-            chips.Controls.Add(_namedChip);
+            chips.Controls.Add(_linkChip);
             chips.Controls.Add(_speechChip);
 
             var actions = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 6, 0, 6) };
-            actions.Controls.AddRange(new Control[] { _addButton, _presetButton, _sayButton, _deleteButton });
+            actions.Controls.AddRange(new Control[] { _addButton, _presetButton, _savePresetButton, _sayButton, _deleteButton });
 
             var bottom = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
             bottom.Controls.Add(_closeButton);
@@ -184,7 +192,12 @@ namespace MissionPlanner.BSA.UI
             Controls.Add(layout);
 
             _addButton.Click += (s, e) => AddAlert();
-            _presetButton.Click += (s, e) => _presetMenu.Show(_presetButton, new Point(0, _presetButton.Height));
+            _presetButton.Click += (s, e) =>
+            {
+                BuildPresetMenu();
+                _presetMenu.Show(_presetButton, new Point(0, _presetButton.Height));
+            };
+            _savePresetButton.Click += (s, e) => SaveSelectedAsPreset();
             _sayButton.Click += (s, e) => SayNow();
             _deleteButton.Click += (s, e) => DeleteSelected();
             _saveButton.Click += (s, e) => Save();
@@ -199,12 +212,20 @@ namespace MissionPlanner.BSA.UI
             HookEditorEvents();
 
             RefreshList(_alerts.FirstOrDefault());
-            UpdateStatusChips(false, false, 0, Judicar2600BundleProfile.NamedFields.Length, false);
+            UpdateStatusChips(AircraftLinkStatus.NotConnected, false);
         }
 
         public IReadOnlyList<CustomWarning> Alerts => _alerts;
 
         public Func<Color, Color?> PickColour { get; set; }
+
+        public Func<string, bool> ConfirmReplace { get; set; }
+
+        public Func<string, bool> ConfirmRemove { get; set; }
+
+        public Action<string> ShowMessage { get; set; }
+
+        public string PresetsPath { get; set; } = BsaPaths.AlertPresetsPath;
 
         public string SelectedColour => _colour.SelectedItem as string;
 
@@ -212,8 +233,7 @@ namespace MissionPlanner.BSA.UI
 
         public CustomWarning Selected => _selected;
 
-        public string PhaseStatus => _phaseChip.Text;
-        public string NamedStatus => _namedChip.Text;
+        public string LinkStatus => _linkChip.Text;
         public string SpeechStatus => _speechChip.Text;
         public string SaveStatus => _saveState.Text;
 
@@ -277,9 +297,137 @@ namespace MissionPlanner.BSA.UI
             return alert;
         }
 
-        public CustomWarning AddPreset(string presetId)
+        public CustomWarning AddPreset(string presetId) => AddCopy(AlertPresets.Create(presetId));
+
+        public CustomWarning AddSavedPreset(string title)
         {
-            var alert = AlertPresets.Create(presetId);
+            var preset = AlertPresetStore.Load(PresetsPath).Presets.FirstOrDefault(p => SameTitle(p.Alert.Title, title));
+            return preset == null ? null : AddCopy(preset);
+        }
+
+        public bool SaveSelectedAsPreset()
+        {
+            var selected = Selected;
+            if (selected == null) return false;
+            var problems = Validate(new[] { selected });
+            if (problems.Count > 0)
+            {
+                ShowMessage?.Invoke("This alert cannot be saved as a preset:\n\n" + string.Join("\n", problems));
+                return false;
+            }
+            var title = selected.Alert.Title.Trim();
+            if (BuiltInPresetTitles().Any(t => SameTitle(t, title)))
+            {
+                ShowMessage?.Invoke("'" + title + "' is the name of a built-in preset. Give the alert another name first.");
+                return false;
+            }
+            var loaded = AlertPresetStore.Load(PresetsPath);
+            if (loaded.Error != null)
+            {
+                ShowMessage?.Invoke(loaded.Error + "\n\nThe file was left as it is.");
+                return false;
+            }
+            var presets = loaded.Presets;
+            var existing = presets.FindIndex(p => SameTitle(p.Alert.Title, title));
+            if (existing >= 0 && ConfirmReplace?.Invoke(title) != true) return false;
+            var copy = Clone(selected);
+            copy.Alert.Title = title;
+            if (existing >= 0) presets[existing] = copy;
+            else presets.Add(copy);
+            try
+            {
+                AlertPresetStore.Save(PresetsPath, presets);
+            }
+            catch (Exception ex)
+            {
+                ShowMessage?.Invoke("The preset could not be saved: " + ex.Message);
+                return false;
+            }
+            ShowMessage?.Invoke("'" + title + "' was saved as a preset. It is listed under Add from preset.");
+            return true;
+        }
+
+        public bool RemoveSavedPreset(string title)
+        {
+            var loaded = AlertPresetStore.Load(PresetsPath);
+            if (loaded.Error != null)
+            {
+                ShowMessage?.Invoke(loaded.Error + "\n\nThe file was left as it is.");
+                return false;
+            }
+            var presets = loaded.Presets;
+            var index = presets.FindIndex(p => SameTitle(p.Alert.Title, title));
+            if (index < 0 || ConfirmRemove?.Invoke(presets[index].Alert.Title) != true) return false;
+            presets.RemoveAt(index);
+            try
+            {
+                AlertPresetStore.Save(PresetsPath, presets);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                ShowMessage?.Invoke("The preset could not be removed: " + ex.Message);
+                return false;
+            }
+        }
+
+        public List<string> PresetMenuText()
+        {
+            BuildPresetMenu();
+            var lines = new List<string>();
+            foreach (ToolStripItem item in _presetMenu.Items)
+            {
+                if (item is ToolStripSeparator)
+                {
+                    lines.Add("-");
+                    continue;
+                }
+                lines.Add(item.Text);
+                if (item is ToolStripMenuItem menu)
+                    lines.AddRange(menu.DropDownItems.Cast<ToolStripItem>().Select(child => "  " + child.Text));
+            }
+            return lines;
+        }
+
+        void BuildPresetMenu()
+        {
+            _presetMenu.Items.Clear();
+            foreach (var id in AlertPresets.Ids)
+            {
+                var item = new ToolStripMenuItem(AlertPresets.Create(id).Alert.Title) { Tag = id };
+                item.Click += (s, e) => AddPreset((string)((ToolStripMenuItem)s).Tag);
+                _presetMenu.Items.Add(item);
+            }
+            var loaded = AlertPresetStore.Load(PresetsPath);
+            if (loaded.Error != null)
+            {
+                _presetMenu.Items.Add(new ToolStripSeparator());
+                _presetMenu.Items.Add(new ToolStripMenuItem("Saved presets could not be read") { Enabled = false, ToolTipText = loaded.Error });
+                return;
+            }
+            if (loaded.Presets.Count == 0) return;
+            _presetMenu.Items.Add(new ToolStripSeparator());
+            var remove = new ToolStripMenuItem("Remove saved preset");
+            foreach (var title in loaded.Presets.Select(p => p.Alert.Title))
+            {
+                var add = new ToolStripMenuItem(title) { Tag = title };
+                add.Click += (s, e) => AddSavedPreset((string)((ToolStripMenuItem)s).Tag);
+                _presetMenu.Items.Add(add);
+                var drop = new ToolStripMenuItem(title) { Tag = title };
+                drop.Click += (s, e) => RemoveSavedPreset((string)((ToolStripMenuItem)s).Tag);
+                remove.DropDownItems.Add(drop);
+            }
+            _presetMenu.Items.Add(new ToolStripSeparator());
+            _presetMenu.Items.Add(remove);
+        }
+
+        static IEnumerable<string> BuiltInPresetTitles() => AlertPresets.Ids.Select(id => AlertPresets.Create(id).Alert.Title);
+
+        static bool SameTitle(string a, string b) =>
+            string.Equals((a ?? "").Trim(), (b ?? "").Trim(), StringComparison.OrdinalIgnoreCase);
+
+        CustomWarning AddCopy(CustomWarning alert)
+        {
             alert.Alert.Id = AlertPresets.UniqueId(alert.Alert.Id, _alerts);
             Add(alert);
             return alert;
@@ -366,14 +514,25 @@ namespace MissionPlanner.BSA.UI
                     problems.Add(name + ": needs a name.");
                 if (AlertSource.Parse(alert.Source).Kind == AlertSourceKind.Unknown)
                     problems.Add(name + ": choose what it watches.");
-                if (string.IsNullOrWhiteSpace(warning.Text))
-                    problems.Add(name + ": needs something to say.");
+                if (!DoesSomething(warning))
+                    problems.Add(name + ": does nothing. Give it something to say, colour its quick view, or make it a pre-flight check.");
                 if (!alert.Always && !alert.TriggerOnStale && warning.ConditionType == CustomWarning.Conditional.NONE)
                     problems.Add(name + ": needs a trigger.");
                 if (alert.HoldSeconds < 0 || alert.FreshSeconds <= 0 || alert.ArmedGraceSeconds < 0 || warning.RepeatTime < 0)
                     problems.Add(name + ": times must be positive.");
             }
             return problems;
+        }
+
+        public static bool DoesSomething(CustomWarning warning)
+        {
+            var alert = warning?.Alert;
+            if (alert == null) return false;
+            var colour = (warning.color ?? "").Trim();
+            return !string.IsNullOrWhiteSpace(warning.Text) ||
+                   !string.IsNullOrWhiteSpace(alert.StaleText) ||
+                   alert.Show && colour.Length > 0 && colour != AlertEvaluator.NoColour ||
+                   alert.Preflight != AlertPreflight.None;
         }
 
         public static string WatchLabel(AlertOptions alert) => AlertDescriptions.WatchLabel(alert);
@@ -400,17 +559,29 @@ namespace MissionPlanner.BSA.UI
             return text.Length > 0 ? text : (alert.StaleText ?? "").Trim();
         }
 
-        public void UpdateStatusChips(bool linkOpen, bool phaseKnown, int namedFresh, int namedTotal, bool speechOn)
+        public static AircraftLinkStatus Classify(bool linkOpen, DateTime? lastHeartbeatUtc, DateTime nowUtc)
         {
-            _phaseChip.Text = !linkOpen
-                ? "Flight phase: no aircraft connected"
-                : phaseKnown
-                    ? "Flight phase: receiving"
-                    : "Flight phase: not received (requested while an alert needs it)";
-            _phaseChip.ForeColor = linkOpen && phaseKnown ? Color.ForestGreen : Color.DarkOrange;
-            _namedChip.Text = "Judicar values: " + namedFresh + " of " + namedTotal + " fresh";
-            _namedChip.ForeColor = linkOpen && namedFresh == namedTotal ? Color.ForestGreen : Color.DarkOrange;
-            _speechChip.Text = speechOn ? "Speech is on" : "Speech is off in Mission Planner: alerts will only show";
+            if (!linkOpen) return AircraftLinkStatus.NotConnected;
+            return lastHeartbeatUtc.HasValue && AlertSourceResolver.IsFresh(lastHeartbeatUtc.Value, nowUtc, DataFreshSeconds)
+                ? AircraftLinkStatus.Receiving
+                : AircraftLinkStatus.NoData;
+        }
+
+        public static string LinkText(AircraftLinkStatus status)
+        {
+            switch (status)
+            {
+                case AircraftLinkStatus.Receiving: return "Aircraft connected: receiving data";
+                case AircraftLinkStatus.NoData: return "Aircraft connected: no data received";
+                default: return "Aircraft not connected";
+            }
+        }
+
+        public void UpdateStatusChips(AircraftLinkStatus link, bool speechOn)
+        {
+            _linkChip.Text = LinkText(link);
+            _linkChip.ForeColor = link == AircraftLinkStatus.Receiving ? Color.ForestGreen : Color.DarkOrange;
+            _speechChip.Text = speechOn ? "Speech is on" : "Speech is off";
             _speechChip.ForeColor = speechOn ? Color.ForestGreen : Color.DarkOrange;
         }
 
@@ -419,26 +590,14 @@ namespace MissionPlanner.BSA.UI
             try
             {
                 var port = MainV2.comPort;
-                var now = DateTime.UtcNow;
                 var linkOpen = port?.BaseStream != null && port.BaseStream.IsOpen && !port.logreadmode;
-                var phaseKnown = false;
+                DateTime? heartbeat = null;
                 if (linkOpen)
                 {
-                    var packet = port.MAV.getPacketLast((uint)MAVLink.MAVLINK_MSG_ID.EXTENDED_SYS_STATE);
-                    phaseKnown = packet != null && AlertSourceResolver.IsFresh(packet.rxtime, now, FlightPhase.PhaseFreshSeconds);
+                    var packet = port.MAV.getPacketLast((uint)MAVLink.MAVLINK_MSG_ID.HEARTBEAT);
+                    if (packet != null && packet.rxtime != DateTime.MinValue) heartbeat = packet.rxtime;
                 }
-                var fresh = 0;
-                var telemetry = AlertComposition.CurrentTelemetry();
-                if (linkOpen && telemetry != null)
-                {
-                    fresh = (int)AlertSourceResolver.Read(new AlertOptions
-                    {
-                        Source = AlertSource.NamedFreshCount,
-                        FreshSeconds = 5,
-                        SourceNames = Judicar2600BundleProfile.NamedFields.ToList()
-                    }, telemetry, now).Value;
-                }
-                UpdateStatusChips(linkOpen, phaseKnown, fresh, Judicar2600BundleProfile.NamedFields.Length, MainV2.speechEnabled());
+                UpdateStatusChips(Classify(linkOpen, heartbeat, DateTime.UtcNow), MainV2.speechEnable);
             }
             catch
             {
@@ -453,7 +612,7 @@ namespace MissionPlanner.BSA.UI
             if (text.Length == 0) return;
             if (MainV2.speechEngine == null || !MainV2.speechEnabled())
             {
-                CustomMessageBox.Show("Speech is off in Mission Planner, so nothing can be said.\n\nIt would say: " + text, Caption);
+                CustomMessageBox.Show("Speech is off, so nothing can be said.\n\nIt would say: " + text, Caption);
                 return;
             }
             MainV2.speechEngine.SpeakAsync(text);
@@ -514,7 +673,7 @@ namespace MissionPlanner.BSA.UI
             yield return WatchLabel(alert);
             yield return WhenLabel(alert);
             yield return TriggerLabel(warning);
-            yield return warning.Text ?? "";
+            yield return string.IsNullOrWhiteSpace(warning.Text) ? "-" : warning.Text;
             yield return EveryLabel(warning);
             yield return PreflightLabel(alert);
         }
@@ -556,7 +715,7 @@ namespace MissionPlanner.BSA.UI
             AddRow("Trigger", Inline(_trigger, _threshold, InlineLabel("for more than"), _hold, InlineLabel("s")),
                 "If phase unknown", _unknown);
             AddRow("Data counts as stopped after", Inline(_fresh, InlineLabel("s")), "If data stops, say", _staleText);
-            AddRow("Say", _say, "Every", Inline(_repeat, InlineLabel("s")));
+            AddRow("Say (optional)", _say, "Every", Inline(_repeat, InlineLabel("s")));
             AddRow("After arming, wait", Inline(_grace, InlineLabel("s")), "Pre-flight", _preflight);
             AddRow("Show", Inline(_show, _colour), null, null);
 
@@ -587,7 +746,8 @@ namespace MissionPlanner.BSA.UI
         {
             var warning = Selected;
             _editor.Enabled = warning != null;
-            _sayButton.Enabled = _deleteButton.Enabled = warning != null;
+            _deleteButton.Enabled = _savePresetButton.Enabled = warning != null;
+            _sayButton.Enabled = warning != null && PreviewText(warning).Length > 0;
             if (warning == null) return;
             var alert = warning.Alert;
             _loading = true;
@@ -653,6 +813,7 @@ namespace MissionPlanner.BSA.UI
             alert.Preflight = (AlertPreflight)Value(_preflight);
 
             UpdateEditorState();
+            _sayButton.Enabled = PreviewText(warning).Length > 0;
             RefreshSelectedRow();
             UpdateSaveState();
         }
