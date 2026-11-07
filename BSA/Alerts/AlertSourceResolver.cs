@@ -68,10 +68,12 @@ namespace MissionPlanner.BSA.Alerts
             }
         }
 
+        public const double ReceivedDuringTickToleranceSeconds = 1;
+
         public static bool IsFresh(DateTime receivedUtc, DateTime nowUtc, double windowSeconds)
         {
             var age = (nowUtc - receivedUtc).TotalSeconds;
-            return age >= 0 && age <= windowSeconds;
+            return age >= -ReceivedDuringTickToleranceSeconds && age <= windowSeconds;
         }
 
         static AlertReading ReadField(string property, IAlertTelemetry telemetry, DateTime nowUtc, double window)

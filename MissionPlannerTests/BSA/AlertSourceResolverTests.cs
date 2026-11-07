@@ -154,6 +154,44 @@ namespace MissionPlanner.BSA.Tests
         }
 
         [TestMethod]
+        public void GpsFixCount_AReceiverHeardDuringTheTickStillCounts()
+        {
+            var telemetry = new FakeTelemetry();
+            telemetry.Fields["gpsstatus"] = 3;
+            telemetry.Fields["gpsstatus2"] = 3;
+            telemetry.Packets[(uint)MAVLink.MAVLINK_MSG_ID.GPS_RAW_INT] = Now.AddMilliseconds(-300);
+            telemetry.Packets[(uint)MAVLink.MAVLINK_MSG_ID.GPS2_RAW] = Now.AddMilliseconds(15);
+
+            Assert.AreEqual(2, AlertSourceResolver.Read(Watch(AlertSource.GpsFixCount), telemetry, Now).Value);
+        }
+
+        [TestMethod]
+        public void GpsRedundancyLost_NeverFiresWhileBothReceiversKeepAFix()
+        {
+            var telemetry = new FakeTelemetry();
+            telemetry.Fields["gpsstatus"] = 3;
+            telemetry.Fields["gpsstatus2"] = 3;
+            var watch = AlertPresets.Create(AlertPresets.GpsRedundancyLostId).Alert;
+
+            for (var tick = 0; tick < 200; tick++)
+            {
+                var now = Now.AddMilliseconds(tick * 100);
+                telemetry.Packets[(uint)MAVLink.MAVLINK_MSG_ID.GPS_RAW_INT] = now.AddMilliseconds(tick % 5 == 0 ? 20 : -250);
+                telemetry.Packets[(uint)MAVLink.MAVLINK_MSG_ID.GPS2_RAW] = now.AddMilliseconds(tick % 7 == 0 ? 5 : -400);
+                Assert.AreEqual(2, AlertSourceResolver.Read(watch, telemetry, now).Value, "tick " + tick);
+            }
+        }
+
+        [TestMethod]
+        public void IsFresh_AcceptsAPacketStampedJustAfterTheTickButNotOneFromTheFarFuture()
+        {
+            Assert.IsTrue(AlertSourceResolver.IsFresh(Now.AddMilliseconds(50), Now, 3));
+            Assert.IsTrue(AlertSourceResolver.IsFresh(Now.AddSeconds(-3), Now, 3));
+            Assert.IsFalse(AlertSourceResolver.IsFresh(Now.AddSeconds(-3.1), Now, 3));
+            Assert.IsFalse(AlertSourceResolver.IsFresh(Now.AddSeconds(5), Now, 3));
+        }
+
+        [TestMethod]
         public void NamedFreshCount_CountsEachFreshNameOnce()
         {
             var telemetry = new FakeTelemetry();
